@@ -1,6 +1,6 @@
 import { useState, useCallback, lazy, Suspense } from 'react';
 import { PerformanceProvider } from '../performance/integration/performance-provider';
-import { performanceMonitor } from '../performance/monitoring/performance-monitor';
+// import { performanceMonitor } from '../performance/monitoring/performance-monitor';
 import { LoadingSpinner, ErrorBoundary } from '../performance/optimization/react-optimizations';
 
 // Lazy load main components

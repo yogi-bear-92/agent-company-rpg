@@ -147,19 +147,19 @@ export function useOptimizedAgents(
   }, []);
 
   // Optimized agent removal
-  const removeAgent = useCallback((agentId: string) => {
+  const removeAgent = useCallback((agentId: number | string) => {
     setState(prev => ({
       ...prev,
-      agents: prev.agents.filter(a => a.id !== agentId)
+      agents: prev.agents.filter(a => a.id.toString() !== agentId.toString())
     }));
   }, []);
 
   // Optimized agent update
-  const updateAgent = useCallback((agentId: string, updates: Partial<Agent>) => {
+  const updateAgent = useCallback((agentId: number | string, updates: Partial<Agent>) => {
     setState(prev => ({
       ...prev,
       agents: prev.agents.map(agent => 
-        agent.id === agentId ? { ...agent, ...updates } : agent
+        agent.id.toString() === agentId.toString() ? { ...agent, ...updates } : agent
       )
     }));
   }, []);

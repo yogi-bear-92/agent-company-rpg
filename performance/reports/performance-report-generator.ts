@@ -1,7 +1,7 @@
 // Performance report generator with comprehensive metrics and recommendations
 import { performanceMonitor } from '../monitoring/performance-monitor';
 import { webVitalsDashboard } from '../monitoring/web-vitals';
-import { performanceBenchmark } from '../testing/performance-benchmarks';
+// import { performanceBenchmark } from '../testing/performance-benchmarks';
 
 export interface PerformanceIssue {
   severity: 'low' | 'medium' | 'high' | 'critical';
@@ -38,14 +38,14 @@ export interface DetailedPerformanceReport {
     }>;
   };
   performance: {
-    renderMetrics: Record<string, unknown>;
-    memoryUsage: Record<string, unknown>;
-    networkMetrics: Record<string, unknown>;
+    renderMetrics: Record<string, any>;
+    memoryUsage: Record<string, any>;
+    networkMetrics: Record<string, any>;
   };
   issues: PerformanceIssue[];
   recommendations: PerformanceRecommendation[];
   benchmarks: {
-    summary: Record<string, unknown>;
+    summary: Record<string, any>;
     improvements: string[];
   };
 }
@@ -101,7 +101,7 @@ class PerformanceReportGenerator {
     };
   }
 
-  private calculateOverallScore(performanceData: unknown, _webVitalsData: unknown[], benchmarkData: unknown): number {
+  private calculateOverallScore(performanceData: any, _webVitalsData: any[], benchmarkData: any): number {
     const webVitalsScore = webVitalsDashboard.getPerformanceScore();
     const performanceScore = this.calculatePerformanceScore(performanceData);
     const benchmarkScore = benchmarkData.summary?.averageImprovement ? 
@@ -110,24 +110,24 @@ class PerformanceReportGenerator {
     return Math.round((webVitalsScore * 0.4 + performanceScore * 0.4 + benchmarkScore * 0.2));
   }
 
-  private calculatePerformanceScore(data: unknown): number {
-    if (!data.current) return 75;
+  private calculatePerformanceScore(data: any): number {
+    if (!data?.current) return 75;
     
     let score = 100;
     
     // Deduct points for slow render times
-    if (data.current.renderTime > 16) {
+    if (data.current?.renderTime > 16) {
       score -= Math.min(30, (data.current.renderTime - 16) * 2);
     }
     
     // Deduct points for high memory usage
-    const memoryMB = data.current.heapUsed / 1024 / 1024;
+    const memoryMB = (data.current?.heapUsed || 0) / 1024 / 1024;
     if (memoryMB > 100) {
       score -= Math.min(20, (memoryMB - 100) / 10);
     }
     
     // Deduct points for warnings
-    score -= Math.min(25, data.warnings.length * 5);
+    score -= Math.min(25, (data?.warnings?.length || 0) * 5);
     
     return Math.max(0, Math.round(score));
   }
@@ -140,16 +140,16 @@ class PerformanceReportGenerator {
     return 'F';
   }
 
-  private identifyCriticalIssues(performanceData: unknown, webVitalsData: unknown[]): PerformanceIssue[] {
+  private identifyCriticalIssues(performanceData: any, webVitalsData: any[]): PerformanceIssue[] {
     const issues: PerformanceIssue[] = [];
     
     // Check for critical web vitals issues
-    webVitalsData.forEach(vital => {
-      if (vital.rating === 'poor') {
+    webVitalsData.forEach((vital: any) => {
+      if (vital?.rating === 'poor') {
         issues.push({
           severity: 'high',
           metric: vital.name,
-          description: `${vital.name} is ${vital.value.toFixed(1)}ms (poor rating)`,
+          description: `${vital.name} is ${(vital.value || 0).toFixed(1)}ms (poor rating)`,
           impact: 'Poor user experience and SEO ranking',
           recommendation: `Optimize ${vital.name} to be under ${this.getMetricTarget(vital.name)}`
         });
@@ -157,33 +157,33 @@ class PerformanceReportGenerator {
     });
     
     // Check for performance budget violations
-    performanceData.warnings.forEach((warning: unknown) => {
+    (performanceData?.warnings || []).forEach((warning: any) => {
       issues.push({
         severity: 'medium',
-        metric: warning.metric,
-        description: `${warning.metric} exceeds budget: ${warning.current.toFixed(1)} > ${warning.budget}`,
+        metric: warning?.metric || 'Unknown',
+        description: `${warning?.metric || 'Unknown'} exceeds budget: ${(warning?.current || 0).toFixed(1)} > ${warning?.budget || 0}`,
         impact: 'Degraded performance and user experience',
         recommendation: 'Optimize component rendering and reduce computational complexity'
       });
     });
     
     // Check component-specific issues
-    const componentReport = performanceData.componentTimings || [];
-    componentReport.forEach((comp: unknown) => {
-      if (comp.averageRenderTime > 32) { // 2 frames
+    const componentReport = performanceData?.componentTimings || [];
+    componentReport.forEach((comp: any) => {
+      if ((comp?.averageRenderTime || 0) > 32) { // 2 frames
         issues.push({
           severity: 'high',
-          metric: comp.component,
-          description: `${comp.component} renders slowly (${comp.averageRenderTime.toFixed(1)}ms avg)`,
+          metric: comp?.component || 'Unknown Component',
+          description: `${comp?.component || 'Unknown Component'} renders slowly (${(comp?.averageRenderTime || 0).toFixed(1)}ms avg)`,
           impact: 'Blocking UI updates and poor responsiveness',
           recommendation: 'Use React.memo, useMemo, or useCallback to optimize component'
         });
       }
-      if (comp.renderCount > 50) {
+      if ((comp?.renderCount || 0) > 50) {
         issues.push({
           severity: 'medium',
-          metric: comp.component,
-          description: `${comp.component} re-renders frequently (${comp.renderCount} times)`,
+          metric: comp?.component || 'Unknown Component',
+          description: `${comp?.component || 'Unknown Component'} re-renders frequently (${comp?.renderCount || 0} times)`,
           impact: 'Unnecessary computations and battery drain',
           recommendation: 'Check dependencies in useEffect and optimize state updates'
         });
@@ -193,36 +193,36 @@ class PerformanceReportGenerator {
     return issues;
   }
 
-  private identifyImprovements(benchmarkData: unknown): string[] {
+  private identifyImprovements(benchmarkData: any): string[] {
     const improvements: string[] = [];
     
-    if (benchmarkData.summary?.averageImprovement > 30) {
-      improvements.push(`Optimizations achieved ${benchmarkData.summary.averageImprovement.toFixed(1)}% performance improvement`);
+    if ((benchmarkData?.summary?.averageImprovement || 0) > 30) {
+      improvements.push(`Optimizations achieved ${(benchmarkData?.summary?.averageImprovement || 0).toFixed(1)}% performance improvement`);
     }
     
-    if (benchmarkData.details?.agentRendering?.improvement > 25) {
+    if ((benchmarkData?.details?.agentRendering?.improvement || 0) > 25) {
       improvements.push('Agent rendering optimizations show significant improvement');
     }
     
-    if (benchmarkData.details?.questProcessing?.improvement > 20) {
+    if ((benchmarkData?.details?.questProcessing?.improvement || 0) > 20) {
       improvements.push('Quest processing performance has been enhanced');
     }
     
     return improvements;
   }
 
-  private generateRecommendations(performanceData: unknown, webVitalsData: unknown[], _benchmarkData: unknown): PerformanceRecommendation[] {
+  private generateRecommendations(performanceData: any, webVitalsData: any[], _benchmarkData: any): PerformanceRecommendation[] {
     const recommendations: PerformanceRecommendation[] = [];
     
     // Web Vitals recommendations
-    webVitalsData.forEach(vital => {
-      if (vital.rating === 'needs-improvement' || vital.rating === 'poor') {
+    webVitalsData.forEach((vital: any) => {
+      if (vital?.rating === 'needs-improvement' || vital?.rating === 'poor') {
         recommendations.push(this.getWebVitalRecommendation(vital));
       }
     });
     
     // Component optimization recommendations
-    if (performanceData.warnings.length > 3) {
+    if ((performanceData?.warnings?.length || 0) > 3) {
       recommendations.push({
         priority: 'high',
         category: 'Component Optimization',
@@ -234,7 +234,7 @@ class PerformanceReportGenerator {
     }
     
     // Memory optimization recommendations
-    if (performanceData.current?.heapUsed > 100 * 1024 * 1024) {
+    if ((performanceData?.current?.heapUsed || 0) > 100 * 1024 * 1024) {
       recommendations.push({
         priority: 'medium',
         category: 'Memory Management',
@@ -258,7 +258,7 @@ class PerformanceReportGenerator {
     return recommendations;
   }
 
-  private getWebVitalRecommendation(vital: unknown): PerformanceRecommendation {
+  private getWebVitalRecommendation(vital: any): PerformanceRecommendation {
     const recommendations = {
       'FCP': {
         priority: 'high' as const,
@@ -294,11 +294,11 @@ class PerformanceReportGenerator {
       }
     };
     
-    return recommendations[vital.name as keyof typeof recommendations] || {
+    return recommendations[vital?.name as keyof typeof recommendations] || {
       priority: 'medium',
       category: 'Performance',
-      title: `Optimize ${vital.name}`,
-      description: `Improve ${vital.name} performance`,
+      title: `Optimize ${vital?.name || 'Unknown'}`,
+      description: `Improve ${vital?.name || 'Unknown'} performance`,
       implementation: 'Follow web performance best practices',
       estimatedImprovement: '10-30% improvement'
     };

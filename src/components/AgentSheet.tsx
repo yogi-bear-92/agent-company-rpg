@@ -7,7 +7,7 @@ interface AgentSheetProps {
   onMissionAssign?: (agent: Agent) => void;
 }
 
-export default function AgentSheet({ agent, onClose, onAgentUpdate, onMissionAssign }: AgentSheetProps) {
+export default function AgentSheet({ agent, onClose, onMissionAssign }: AgentSheetProps) {
   const renderStatBar = (value: number, max: number = 100, color: string) => {
     const safeBoundedValue = Math.max(0, Math.min(max, isNaN(value) ? 0 : value));
     return (

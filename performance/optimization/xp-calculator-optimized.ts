@@ -109,7 +109,11 @@ export function calculateLevelFromXp(totalXp: number): { level: number; currentL
 
 // Batch XP calculation for multiple agents
 export function batchCalculateXpRewards(
-  questAgentPairs: Array<{ quest: Quest; agent: Agent; completionData?: unknown }>
+  questAgentPairs: Array<{ quest: Quest; agent: Agent; completionData?: {
+    completionTime?: number;
+    optionalObjectivesCompleted?: number;
+    teamPerformanceBonus?: number;
+  } }>
 ): Array<{ agentId: number; xpReward: number; calculationTime: number }> {
   const startTime = performance.now();
   

@@ -1,6 +1,6 @@
 // Performance monitoring provider for React app
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { performanceMonitor, PerformanceReport } from '../monitoring/performance-monitor';
+import { performanceMonitor } from '../monitoring/performance-monitor';
 import { webVitalsDashboard, WebVitalsMetric } from '../monitoring/web-vitals';
 import { performanceReportGenerator, DetailedPerformanceReport } from '../reports/performance-report-generator';
 

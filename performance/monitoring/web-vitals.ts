@@ -119,8 +119,8 @@ export function onCLS(callback: WebVitalsCallback) {
         // If the entry occurred less than 1 second after the previous entry and
         // less than 5 seconds after the first entry in the session, include it
         if (sessionValue &&
-            layoutShiftEntry.startTime - lastSessionEntry.startTime < 1000 &&
-            layoutShiftEntry.startTime - firstSessionEntry.startTime < 5000) {
+            layoutShiftEntry.startTime - (lastSessionEntry as any)?.startTime < 1000 &&
+            layoutShiftEntry.startTime - (firstSessionEntry as any)?.startTime < 5000) {
           sessionValue += layoutShiftEntry.value;
           sessionEntries.push(layoutShiftEntry);
         } else {
