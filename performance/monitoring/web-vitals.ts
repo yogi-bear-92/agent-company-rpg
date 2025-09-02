@@ -83,13 +83,13 @@ export function onFID(callback: WebVitalsCallback) {
   const observer = new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
       const fidEntry = entry as PerformanceEventTiming;
-      const value = fidEntry.processingStart - fidEntry.startTime;
+      const fidValue = fidEntry.processingStart - fidEntry.startTime;
       
       callback({
         name: 'FID',
-        value,
-        rating: getRating(value, THRESHOLDS.FID),
-        delta: value,
+        value: fidValue,
+        rating: getRating(fidValue, THRESHOLDS.FID),
+        delta: fidValue,
         id: generateUniqueId(),
         timestamp: Date.now()
       });
@@ -103,14 +103,20 @@ export function onFID(callback: WebVitalsCallback) {
   }
 }
 
+interface LayoutShiftEntry extends PerformanceEntry {
+  hadRecentInput: boolean;
+  value: number;
+  startTime: number;
+}
+
 export function onCLS(callback: WebVitalsCallback) {
   let clsValue = 0;
   let sessionValue = 0;
-  let sessionEntries: unknown[] = [];
+  let sessionEntries: LayoutShiftEntry[] = [];
   
   const observer = new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
-      const layoutShiftEntry = entry as PerformanceEntry & { hadRecentInput: boolean; value: number; startTime: number };
+      const layoutShiftEntry = entry as LayoutShiftEntry;
       
       if (!layoutShiftEntry.hadRecentInput) {
         const firstSessionEntry = sessionEntries[0];
@@ -119,8 +125,10 @@ export function onCLS(callback: WebVitalsCallback) {
         // If the entry occurred less than 1 second after the previous entry and
         // less than 5 seconds after the first entry in the session, include it
         if (sessionValue &&
-            layoutShiftEntry.startTime - (lastSessionEntry as any)?.startTime < 1000 &&
-            layoutShiftEntry.startTime - (firstSessionEntry as any)?.startTime < 5000) {
+            lastSessionEntry &&
+            firstSessionEntry &&
+            layoutShiftEntry.startTime - lastSessionEntry.startTime < 1000 &&
+            layoutShiftEntry.startTime - firstSessionEntry.startTime < 5000) {
           sessionValue += layoutShiftEntry.value;
           sessionEntries.push(layoutShiftEntry);
         } else {
@@ -151,56 +159,36 @@ export function onCLS(callback: WebVitalsCallback) {
 }
 
 export function onTTFB(callback: WebVitalsCallback) {
-  const observer = new PerformanceObserver((list) => {
-    for (const entry of list.getEntries()) {
-      const navEntry = entry as PerformanceNavigationTiming;
-      const value = navEntry.responseStart - navEntry.requestStart;
-      
-      callback({
-        name: 'TTFB',
-        value,
-        rating: getRating(value, THRESHOLDS.TTFB),
-        delta: value,
-        id: generateUniqueId(),
-        timestamp: Date.now()
-      });
-    }
-  });
+  const navigationEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
   
-  try {
-    observer.observe({ entryTypes: ['navigation'] });
-  } catch {
-    console.warn('TTFB observation not supported');
+  if (navigationEntry) {
+    const ttfb = navigationEntry.responseStart - navigationEntry.requestStart;
+    
+    callback({
+      name: 'TTFB',
+      value: ttfb,
+      rating: getRating(ttfb, THRESHOLDS.TTFB),
+      delta: ttfb,
+      id: generateUniqueId(),
+      timestamp: Date.now()
+    });
   }
 }
 
-// Interaction to Next Paint (INP) - newer metric
 export function onINP(callback: WebVitalsCallback) {
-  const interactionMap = new Map();
-  
   const observer = new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
-      const eventEntry = entry as PerformanceEntry & { interactionId?: number; duration?: number };
+      const eventEntry = entry as PerformanceEventTiming;
+      const inpValue = eventEntry.processingStart - eventEntry.startTime;
       
-      if (eventEntry.interactionId) {
-        const interaction = interactionMap.get(eventEntry.interactionId) || [];
-        interaction.push(eventEntry);
-        interactionMap.set(eventEntry.interactionId, interaction);
-        
-        // Calculate INP when interaction is complete
-        if (interaction.length >= 3 || eventEntry.duration > 0) {
-          const duration = Math.max(...interaction.map((e: PerformanceEntry & { duration?: number }) => e.duration || 0));
-          
-          callback({
-            name: 'INP',
-            value: duration,
-            rating: getRating(duration, THRESHOLDS.INP),
-            delta: duration,
-            id: generateUniqueId(),
-            timestamp: Date.now()
-          });
-        }
-      }
+      callback({
+        name: 'INP',
+        value: inpValue,
+        rating: getRating(inpValue, THRESHOLDS.INP),
+        delta: inpValue,
+        id: generateUniqueId(),
+        timestamp: Date.now()
+      });
     }
   });
   
@@ -211,43 +199,17 @@ export function onINP(callback: WebVitalsCallback) {
   }
 }
 
-export function getCoreWebVitals(callback: WebVitalsCallback) {
-  onFCP(callback);
-  onLCP(callback);
-  onFID(callback);
-  onCLS(callback);
-  onTTFB(callback);
-  onINP(callback);
-}
-
 function generateUniqueId(): string {
-  return Math.random().toString(36).substr(2, 9);
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Real-time performance dashboard data
-export class WebVitalsDashboard {
+// Dashboard class for managing web vitals
+class WebVitalsDashboard {
   private metrics: WebVitalsMetric[] = [];
   private callbacks: WebVitalsCallback[] = [];
+  private isTracking = false;
 
-  constructor() {
-    this.initializeCollection();
-  }
-
-  private initializeCollection() {
-    const callback: WebVitalsCallback = (metric) => {
-      this.metrics.push(metric);
-      this.callbacks.forEach(cb => cb(metric));
-      
-      // Keep only last 100 metrics
-      if (this.metrics.length > 100) {
-        this.metrics = this.metrics.slice(-100);
-      }
-    };
-
-    getCoreWebVitals(callback);
-  }
-
-  subscribe(callback: WebVitalsCallback) {
+  subscribe(callback: WebVitalsCallback): () => void {
     this.callbacks.push(callback);
     return () => {
       const index = this.callbacks.indexOf(callback);
@@ -257,37 +219,55 @@ export class WebVitalsDashboard {
     };
   }
 
-  getMetrics() {
+  private notifyCallbacks(metric: WebVitalsMetric) {
+    this.metrics.push(metric);
+    this.callbacks.forEach(callback => callback(metric));
+  }
+
+  startTracking() {
+    if (this.isTracking) return;
+    this.isTracking = true;
+
+    onFCP((metric) => this.notifyCallbacks(metric));
+    onLCP((metric) => this.notifyCallbacks(metric));
+    onFID((metric) => this.notifyCallbacks(metric));
+    onCLS((metric) => this.notifyCallbacks(metric));
+    onTTFB((metric) => this.notifyCallbacks(metric));
+    onINP((metric) => this.notifyCallbacks(metric));
+  }
+
+  stopTracking() {
+    this.isTracking = false;
+    this.callbacks = [];
+  }
+
+  getMetrics(): WebVitalsMetric[] {
     return [...this.metrics];
   }
 
-  getLatestMetrics() {
-    const latest: { [key: string]: WebVitalsMetric } = {};
-    
-    for (const metric of this.metrics) {
-      if (!latest[metric.name] || metric.timestamp > latest[metric.name].timestamp) {
-        latest[metric.name] = metric;
+  getPerformanceScore(): number {
+    if (this.metrics.length === 0) return 100;
+
+    const weights = { FCP: 0.15, LCP: 0.25, FID: 0.15, CLS: 0.15, TTFB: 0.15, INP: 0.15 };
+    let totalScore = 0;
+    let totalWeight = 0;
+
+    for (const [metric, weight] of Object.entries(weights)) {
+      const latestMetric = this.metrics.filter(m => m.name === metric).pop();
+      if (latestMetric) {
+        const score = latestMetric.rating === 'good' ? 100 : 
+                     latestMetric.rating === 'needs-improvement' ? 60 : 25;
+        totalScore += score * weight;
+        totalWeight += weight;
       }
     }
-    
-    return Object.values(latest);
+
+    return totalWeight > 0 ? totalScore / totalWeight : 100;
   }
 
-  getPerformanceScore(): number {
-    const latest = this.getLatestMetrics();
-    if (latest.length === 0) return 100;
-    
-    const scores = latest.map(metric => {
-      switch (metric.rating) {
-        case 'good': return 100;
-        case 'needs-improvement': return 50;
-        case 'poor': return 0;
-      }
-    });
-    
-    return scores.reduce((sum: number, score: number) => sum + score, 0) / scores.length;
+  clearMetrics() {
+    this.metrics = [];
   }
 }
 
 export const webVitalsDashboard = new WebVitalsDashboard();
-export default webVitalsDashboard;

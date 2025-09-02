@@ -1,144 +1,159 @@
-// Optimized hooks for agent management with performance monitoring
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Agent } from '../types/agent';
-import { performanceMonitor } from '../../performance/monitoring/performance-monitor';
+// Optimized agents hook with performance monitoring and efficient updates
+import { useState, useCallback, useMemo } from 'react';
+import { Agent, Quest } from '../types/gameTypes';
+import { batchCalculateXpRewards } from '../../performance/optimization/xp-calculator-optimized';
 
-interface UseOptimizedAgentsOptions {
-  enableFiltering?: boolean;
-  enableSorting?: boolean;
-  batchSize?: number;
-}
-
-interface OptimizedAgentsState {
+interface AgentsState {
   agents: Agent[];
+  quests: Quest[];
   loading: boolean;
   error: string | null;
-  filteredAgents: Agent[];
-  sortedAgents: Agent[];
 }
 
-export function useOptimizedAgents(
-  initialAgents: Agent[] = [],
-  options: UseOptimizedAgentsOptions = {}
-) {
-  const {
-    enableFiltering = true,
-    enableSorting = true,
-    batchSize = 20
-  } = options;
+interface FilterCriteria {
+  level: {
+    min: number;
+    max: number;
+  };
+  skills: string[];
+  availability: 'all' | 'available' | 'busy';
+  sortBy: 'level' | 'name' | 'xp' | 'efficiency';
+  sortOrder: 'asc' | 'desc';
+}
 
-  const [state, setState] = useState<OptimizedAgentsState>({
-    agents: initialAgents,
+export function useOptimizedAgents() {
+  const [state, setState] = useState<AgentsState>({
+    agents: [],
+    quests: [],
     loading: false,
-    error: null,
-    filteredAgents: initialAgents,
-    sortedAgents: initialAgents
+    error: null
   });
 
-  const [filterCriteria, setFilterCriteria] = useState({
-    search: '',
-    class: '',
-    minLevel: 0,
-    maxLevel: 100
+  const [filterCriteria, setFilterCriteria] = useState<FilterCriteria>({
+    level: { min: 1, max: 100 },
+    skills: [],
+    availability: 'all',
+    sortBy: 'level',
+    sortOrder: 'desc'
   });
 
-  const [sortCriteria, setSortCriteria] = useState({
-    field: 'level' as keyof Agent,
-    direction: 'desc' as 'asc' | 'desc'
-  });
-
-  // Memoized filtering function
+  // Memoized filtered and sorted agents
   const filteredAgents = useMemo(() => {
-    if (!enableFiltering) return state.agents;
+    let filtered = state.agents;
 
-    const startTime = performance.now();
-    
-    const filtered = state.agents.filter(agent => {
-      const matchesSearch = !filterCriteria.search || 
-        agent.name.toLowerCase().includes(filterCriteria.search.toLowerCase()) ||
-        agent.class.toLowerCase().includes(filterCriteria.search.toLowerCase());
-      
-      const matchesClass = !filterCriteria.class || 
-        agent.class === filterCriteria.class;
-      
-      const matchesLevel = agent.level >= filterCriteria.minLevel && 
-        agent.level <= filterCriteria.maxLevel;
+    // Level filtering
+    filtered = filtered.filter(agent => 
+      agent.level >= filterCriteria.level.min && 
+      agent.level <= filterCriteria.level.max
+    );
 
-      return matchesSearch && matchesClass && matchesLevel;
-    });
-
-    const endTime = performance.now();
-    const filterTime = endTime - startTime;
-
-    // Track filtering performance
-    if (filterTime > 10) {
-      performanceMonitor.logWarning('Agent filtering', filterTime, 10, 'medium');
+    // Skills filtering
+    if (filterCriteria.skills.length > 0) {
+      filtered = filtered.filter(agent => 
+        filterCriteria.skills.every(skill => 
+          agent.skills.some((agentSkill: { name: string; level: number }) => agentSkill.name === skill)
+        )
+      );
     }
+
+    // Availability filtering
+    if (filterCriteria.availability !== 'all') {
+      filtered = filtered.filter(agent => {
+        const isAvailable = agent.status === 'idle';
+        return filterCriteria.availability === 'available' ? isAvailable : !isAvailable;
+      });
+    }
+
+    // Sorting
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (filterCriteria.sortBy) {
+        case 'level':
+          comparison = a.level - b.level;
+          break;
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'xp':
+          comparison = a.experiencePoints - b.experiencePoints;
+          break;
+        case 'efficiency':
+          // Calculate efficiency based on completed quests vs time
+          const aEfficiency = a.completedQuests.length / Math.max(1, a.level);
+          const bEfficiency = b.completedQuests.length / Math.max(1, b.level);
+          comparison = aEfficiency - bEfficiency;
+          break;
+        default:
+          comparison = 0;
+      }
+
+      return filterCriteria.sortOrder === 'asc' ? comparison : -comparison;
+    });
 
     return filtered;
-  }, [state.agents, filterCriteria, enableFiltering]);
+  }, [state.agents, filterCriteria]);
 
-  // Memoized sorting function
-  const sortedAgents = useMemo(() => {
-    if (!enableSorting) return filteredAgents;
+  // Optimized batch operations
+  const batchUpdateAgents = useCallback((updates: Array<{ agentId: string; updates: Partial<Agent> }>) => {
+    setState(prev => {
+      const updatedAgents = prev.agents.map(agent => {
+        const update = updates.find(u => u.agentId === agent.id);
+        return update ? { ...agent, ...update.updates } : agent;
+      });
 
-    const startTime = performance.now();
-    
-    const sorted = [...filteredAgents].sort((a, b) => {
-      const aValue = a[sortCriteria.field];
-      const bValue = b[sortCriteria.field];
-      
-      let comparison = 0;
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        comparison = aValue.localeCompare(bValue);
-      } else if (typeof aValue === 'number' && typeof bValue === 'number') {
-        comparison = aValue - bValue;
-      }
-      
-      return sortCriteria.direction === 'asc' ? comparison : -comparison;
+      return {
+        ...prev,
+        agents: updatedAgents
+      };
     });
-
-    const sortTime = performance.now() - startTime;
-
-    // Track sorting performance
-    if (sortTime > 5) {
-      performanceMonitor.logWarning('Agent sorting', sortTime, 5, 'medium');
-    }
-
-    return sorted;
-  }, [filteredAgents, sortCriteria, enableSorting]);
-
-  // Batched agents for virtual scrolling
-  const batchedAgents = useMemo(() => {
-    const batches: Agent[][] = [];
-    for (let i = 0; i < sortedAgents.length; i += batchSize) {
-      batches.push(sortedAgents.slice(i, i + batchSize));
-    }
-    return batches;
-  }, [sortedAgents, batchSize]);
-
-  // Update agents with performance tracking
-  const updateAgents = useCallback((newAgents: Agent[]) => {
-    const startTime = performance.now();
-    
-    setState(prev => ({
-      ...prev,
-      agents: newAgents,
-      loading: false,
-      error: null
-    }));
-
-    const updateTime = performance.now() - startTime;
-    
-    // Track update performance
-    performanceMonitor.recordMetric('agent-update', updateTime);
-    
-    if (updateTime > 50) {
-      performanceMonitor.logWarning('Agent update', updateTime, 50, 'medium');
-    }
   }, []);
 
-  // Optimized agent addition
+  // Optimized quest assignment with performance tracking
+  const assignQuestToAgent = useCallback(async (questId: string, agentId: string) => {
+    const startTime = performance.now();
+    
+    try {
+      setState(prev => ({ ...prev, loading: true }));
+
+      const quest = state.quests.find(q => q.id === questId);
+      const agent = state.agents.find(a => a.id === agentId);
+
+      if (!quest || !agent) {
+        throw new Error('Quest or agent not found');
+      }
+
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      setState(prev => ({
+        ...prev,
+        agents: prev.agents.map(a => 
+          a.id === agentId 
+            ? { ...a, status: 'busy' as const, currentQuestId: questId }
+            : a
+        ),
+        quests: prev.quests.map(q => 
+          q.id === questId 
+            ? { ...q, assignedAgentId: agentId, status: 'in-progress' as const }
+            : q
+        ),
+        loading: false
+      }));
+
+      const operationTime = performance.now() - startTime;
+      console.log(`Quest assignment completed in ${operationTime.toFixed(2)}ms`);
+
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Assignment failed'
+      }));
+    }
+  }, [state.agents, state.quests]);
+
+  // Optimized agent operations
   const addAgent = useCallback((agent: Agent) => {
     setState(prev => ({
       ...prev,
@@ -146,108 +161,80 @@ export function useOptimizedAgents(
     }));
   }, []);
 
-  // Optimized agent removal
-  const removeAgent = useCallback((agentId: number | string) => {
+  const removeAgent = useCallback((agentId: string) => {
     setState(prev => ({
       ...prev,
-      agents: prev.agents.filter(a => a.id.toString() !== agentId.toString())
+      agents: prev.agents.filter(a => a.id !== agentId)
     }));
   }, []);
 
   // Optimized agent update
-  const updateAgent = useCallback((agentId: number | string, updates: Partial<Agent>) => {
+  const updateAgent = useCallback((agentId: string, updates: Partial<Agent>) => {
     setState(prev => ({
       ...prev,
       agents: prev.agents.map(agent => 
-        agent.id.toString() === agentId.toString() ? { ...agent, ...updates } : agent
+        agent.id === agentId ? { ...agent, ...updates } : agent
       )
     }));
   }, []);
 
   // Filter update functions
-  const updateFilter = useCallback((updates: Partial<typeof filterCriteria>) => {
+  const updateFilter = useCallback((updates: Partial<FilterCriteria>) => {
     setFilterCriteria(prev => ({ ...prev, ...updates }));
   }, []);
 
-  // Sort update functions
-  const updateSort = useCallback((field: keyof Agent, direction?: 'asc' | 'desc') => {
-    setSortCriteria(prev => ({
-      field,
-      direction: direction || (prev.field === field && prev.direction === 'asc' ? 'desc' : 'asc')
-    }));
-  }, []);
-
-  // Search optimization with debouncing
-  const debouncedSearch = useCallback((searchTerm: string) => {
-    const timeoutId = setTimeout(() => {
-      updateFilter({ search: searchTerm });
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [updateFilter]);
-
   // Performance metrics
-  const performanceStats = useMemo(() => ({
-    totalAgents: state.agents.length,
-    filteredCount: filteredAgents.length,
-    sortedCount: sortedAgents.length,
-    batchCount: batchedAgents.length,
-    filterRatio: state.agents.length > 0 ? filteredAgents.length / state.agents.length : 1,
-    memoryUsage: state.agents.length * 1024 // Rough estimate in bytes
-  }), [state.agents.length, filteredAgents.length, sortedAgents.length, batchedAgents.length]);
+  const performanceMetrics = useMemo(() => {
+    return {
+      totalAgents: state.agents.length,
+      filteredAgents: filteredAgents.length,
+      filterEfficiency: state.agents.length > 0 ? filteredAgents.length / state.agents.length : 0,
+      averageLevel: filteredAgents.length > 0 
+        ? filteredAgents.reduce((sum, agent) => sum + agent.level, 0) / filteredAgents.length 
+        : 0
+    };
+  }, [state.agents.length, filteredAgents.length, filteredAgents]);
 
-  // Effect for performance monitoring
-  useEffect(() => {
-    performanceMonitor.recordMetric('agents-processed', state.agents.length);
-    performanceMonitor.recordMetric('filter-efficiency', performanceStats.filterRatio);
-  }, [state.agents.length, performanceStats.filterRatio]);
+  // Batch XP reward calculation
+  const calculateBatchXpRewards = useCallback((questAgentPairs: Array<{
+    quest: Quest;
+    agent: Agent;
+    completionData?: {
+      completionTime?: number;
+      optionalObjectivesCompleted?: number;
+      teamPerformanceBonus?: number;
+    };
+  }>) => {
+    return batchCalculateXpRewards(questAgentPairs);
+  }, []);
 
   return {
     // State
-    agents: state.agents,
+    agents: filteredAgents,
+    allAgents: state.agents,
+    quests: state.quests,
     loading: state.loading,
     error: state.error,
     
-    // Processed data
-    filteredAgents,
-    sortedAgents,
-    batchedAgents,
+    // Filter state
+    filterCriteria,
     
     // Actions
-    updateAgents,
     addAgent,
     removeAgent,
     updateAgent,
+    batchUpdateAgents,
+    assignQuestToAgent,
+    calculateBatchXpRewards,
     
-    // Filtering
-    filterCriteria,
+    // Filter actions
     updateFilter,
-    debouncedSearch,
     
-    // Sorting
-    sortCriteria,
-    updateSort,
+    // Performance metrics
+    performanceMetrics,
     
-    // Performance
-    performanceStats,
-    
-    // Utils
-    clearFilters: useCallback(() => {
-      setFilterCriteria({
-        search: '',
-        class: '',
-        minLevel: 0,
-        maxLevel: 100
-      });
-    }, []),
-    
-    resetSort: useCallback(() => {
-      setSortCriteria({
-        field: 'level',
-        direction: 'desc'
-      });
-    }, [])
+    // Utility functions
+    clearError: useCallback(() => setState(prev => ({ ...prev, error: null })), []),
+    refreshData: useCallback(() => setState(prev => ({ ...prev, loading: true })), [])
   };
 }
-
-export default useOptimizedAgents;

@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { performanceMonitor } from '../performance/monitoring/performance-monitor';
-// import { webVitalsDashboard } from '../performance/monitoring/web-vitals';
+import { webVitalsDashboard } from '../performance/monitoring/web-vitals';
 import AppOptimized from './App-optimized';
 import './index.css';
 
@@ -10,7 +10,7 @@ performanceMonitor.startMonitoring();
 
 // Initialize web vitals monitoring for production insights
 if (process.env.NODE_ENV === 'production') {
-  // WebVitalsDashboard initializes automatically in constructor
+  webVitalsDashboard.startTracking();
 }
 
 // Create root with performance tracking

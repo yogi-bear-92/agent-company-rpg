@@ -1,0 +1,11 @@
+├─ MIT: 278
+├─ ISC: 28
+├─ Apache-2.0: 18
+├─ BSD-2-Clause: 9
+├─ BSD-3-Clause: 8
+├─ BlueOak-1.0.0: 5
+├─ MPL-2.0: 2
+├─ MIT-0: 1
+├─ Python-2.0: 1
+└─ CC-BY-4.0: 1
+

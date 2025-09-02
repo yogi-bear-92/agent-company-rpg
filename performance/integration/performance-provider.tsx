@@ -163,15 +163,15 @@ function PerformanceOverlay() {
                   <div className="flex justify-between">
                     <span className="text-slate-300">Render:</span>
                     <span className={
-                      latestMetrics.current.renderTime < 16 ? 'text-green-400' : 'text-yellow-400'
+                      (latestMetrics.current as any).renderTime < 16 ? 'text-green-400' : 'text-yellow-400'
                     }>
-                      {latestMetrics.current.renderTime.toFixed(1)}ms
+                      {((latestMetrics.current as any).renderTime || 0).toFixed(1)}ms
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-300">Memory:</span>
                     <span className="text-blue-400">
-                      {(latestMetrics.current.heapUsed / 1024 / 1024).toFixed(1)}MB
+                      {(((latestMetrics.current as any).heapUsed || 0) / 1024 / 1024).toFixed(1)}MB
                     </span>
                   </div>
                 </>
@@ -183,7 +183,7 @@ function PerformanceOverlay() {
               <div className="mt-2 p-2 bg-red-500/20 border border-red-500/50 rounded text-xs">
                 <div className="text-red-400 font-semibold">Issues:</div>
                 {latestMetrics.warnings.slice(0, 2).map((warning, i) => (
-                  <div key={i} className="text-red-300">{warning.metric}</div>
+                  <div key={i} className="text-red-300">{(warning as any).metric}</div>
                 ))}
               </div>
             )}

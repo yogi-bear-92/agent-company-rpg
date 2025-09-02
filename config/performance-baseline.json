@@ -1,0 +1,128 @@
+{
+  "version": "1.0.0",
+  "baseline": {
+    "timestamp": "2025-09-02T22:53:00.000Z",
+    "bundleSize": {
+      "js": {
+        "target": 250,
+        "warning": 400,
+        "error": 500
+      },
+      "css": {
+        "target": 50,
+        "warning": 75,
+        "error": 100
+      },
+      "total": {
+        "target": 300,
+        "warning": 475,
+        "error": 600
+      }
+    },
+    "webVitals": {
+      "FCP": {
+        "good": 1800,
+        "needsImprovement": 3000,
+        "target": 1500
+      },
+      "LCP": {
+        "good": 2500,
+        "needsImprovement": 4000,
+        "target": 2000
+      },
+      "FID": {
+        "good": 100,
+        "needsImprovement": 300,
+        "target": 80
+      },
+      "CLS": {
+        "good": 0.1,
+        "needsImprovement": 0.25,
+        "target": 0.05
+      },
+      "TTFB": {
+        "good": 800,
+        "needsImprovement": 1800,
+        "target": 600
+      },
+      "INP": {
+        "good": 200,
+        "needsImprovement": 500,
+        "target": 150
+      }
+    },
+    "lighthouse": {
+      "performance": {
+        "target": 85,
+        "warning": 75,
+        "minimum": 65
+      },
+      "accessibility": {
+        "target": 90,
+        "warning": 80,
+        "minimum": 70
+      },
+      "bestPractices": {
+        "target": 90,
+        "warning": 80,
+        "minimum": 70
+      },
+      "seo": {
+        "target": 95,
+        "warning": 85,
+        "minimum": 75
+      }
+    },
+    "runtime": {
+      "initialRender": {
+        "target": 50,
+        "warning": 100,
+        "error": 200
+      },
+      "componentRender": {
+        "target": 16,
+        "warning": 30,
+        "error": 50
+      },
+      "xpCalculation": {
+        "target": 1,
+        "warning": 5,
+        "error": 10
+      },
+      "agentFiltering": {
+        "target": 2,
+        "warning": 5,
+        "error": 10
+      }
+    },
+    "memory": {
+      "heapUsed": {
+        "target": 50,
+        "warning": 100,
+        "error": 150
+      },
+      "components": {
+        "target": 100,
+        "warning": 200,
+        "error": 500
+      }
+    }
+  },
+  "monitoring": {
+    "enabled": true,
+    "interval": 5000,
+    "reportingInterval": 30000,
+    "regressionThreshold": 0.1,
+    "alertThresholds": {
+      "critical": 0.5,
+      "high": 0.3,
+      "medium": 0.15
+    }
+  },
+  "automation": {
+    "ciEnabled": true,
+    "prComments": true,
+    "failOnRegression": false,
+    "exportReports": true
+  }
+}
