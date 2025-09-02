@@ -1,8 +1,8 @@
 // Performance monitoring provider for React app
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { performanceMonitor } from '../monitoring/performance-monitor';
+import { performanceMonitor, PerformanceReport } from '../monitoring/performance-monitor';
 import { webVitalsDashboard, WebVitalsMetric } from '../monitoring/web-vitals';
-import { performanceReportGenerator } from '../reports/performance-report-generator';
+import { performanceReportGenerator, DetailedPerformanceReport } from '../reports/performance-report-generator';
 
 interface PerformanceContextType {
   isMonitoring: boolean;
@@ -10,19 +10,11 @@ interface PerformanceContextType {
   performanceScore: number;
   startMonitoring: () => void;
   stopMonitoring: () => void;
-  generateReport: () => Promise<Record<string, unknown>>;
+  generateReport: () => Promise<DetailedPerformanceReport>;
   clearMetrics: () => void;
 }
 
 const PerformanceContext = createContext<PerformanceContextType | null>(null);
-
-export function usePerformanceContext() {
-  const context = useContext(PerformanceContext);
-  if (!context) {
-    throw new Error('usePerformanceContext must be used within PerformanceProvider');
-  }
-  return context;
-}
 
 interface PerformanceProviderProps {
   children: ReactNode;
@@ -56,7 +48,7 @@ export function PerformanceProvider({
     }, 5000);
 
     // Store cleanup functions
-    (window as Record<string, unknown>).__performanceCleanup = () => {
+    (window as any).__performanceCleanup = () => {
       unsubscribe();
       clearInterval(scoreInterval);
     };
@@ -67,10 +59,10 @@ export function PerformanceProvider({
     
     setIsMonitoring(false);
     
-    const cleanup = (window as Record<string, unknown>).__performanceCleanup;
+    const cleanup = (window as any).__performanceCleanup;
     if (typeof cleanup === 'function') {
       cleanup();
-      delete (window as Record<string, unknown>).__performanceCleanup;
+      delete (window as any).__performanceCleanup;
     }
   }, [isMonitoring]);
 
@@ -85,7 +77,7 @@ export function PerformanceProvider({
     };
   }, [enableInProduction, startMonitoring, stopMonitoring]);
 
-  const generateReport = async (): Promise<Record<string, unknown>> => {
+  const generateReport = async (): Promise<DetailedPerformanceReport> => {
     return await performanceReportGenerator.generateComprehensiveReport();
   };
 
@@ -200,6 +192,14 @@ function PerformanceOverlay() {
       </div>
     </div>
   );
+}
+
+export function usePerformanceContext() {
+  const context = useContext(PerformanceContext);
+  if (!context) {
+    throw new Error('usePerformanceContext must be used within PerformanceProvider');
+  }
+  return context;
 }
 
 export default PerformanceProvider;

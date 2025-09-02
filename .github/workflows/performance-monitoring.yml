@@ -1,0 +1,73 @@
+name: Performance Monitoring
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    # Run performance tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  performance-benchmarks:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run performance benchmarks
+      run: npm run test:run -- tests/performance --reporter=json --outputFile=performance-results.json
+
+    - name: Upload performance results
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-results
+        path: performance-results.json
+
+    - name: Performance regression check
+      run: |
+        # Check if performance results show any regressions
+        node -e "
+          const fs = require('fs');
+          const results = JSON.parse(fs.readFileSync('performance-results.json', 'utf8'));
+          
+          // Define performance thresholds (in milliseconds)
+          const thresholds = {
+            'XP calculation': 100,
+            'Level progression': 200,
+            'Quest completion': 500
+          };
+          
+          let hasRegressions = false;
+          
+          // Check results against thresholds
+          results.testResults?.forEach(suite => {
+            suite.assertionResults?.forEach(test => {
+              const testName = test.title;
+              const duration = test.duration || 0;
+              
+              Object.entries(thresholds).forEach(([category, threshold]) => {
+                if (testName.toLowerCase().includes(category.toLowerCase())) {
+                  if (duration > threshold) {
+                    console.log(\`⚠️ Performance regression in \${testName}: \${duration}ms > \${threshold}ms\`);
+                    hasRegressions = true;
+                  } else {
+                    console.log(\`✅ Performance OK for \${testName}: \${duration}ms\`);
+                  }
+                }
+              });
+            });
+          });
+          
+          if (hasRegressions) {
+            process.exit(1);
+          }
+        "

@@ -1,0 +1,454 @@
+name: Performance Monitoring
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run performance tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of performance test'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - lighthouse
+          - bundle
+          - load
+          - memory
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  bundle-analysis:
+    name: Bundle Size Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build for production
+        run: npm run build
+      
+      - name: Analyze bundle size
+        id: bundle-analysis
+        run: |
+          # Install bundle analyzer if not present
+          if ! command -v webpack-bundle-analyzer &> /dev/null; then
+            npm install -g webpack-bundle-analyzer
+          fi
+          
+          # Calculate bundle sizes
+          find dist -name '*.js' -type f -exec ls -lh {} + > bundle-sizes.txt
+          find dist -name '*.css' -type f -exec ls -lh {} + >> bundle-sizes.txt
+          
+          # Get total size
+          TOTAL_SIZE=$(du -sh dist/ | cut -f1)
+          echo "Total bundle size: $TOTAL_SIZE"
+          echo "total_size=$TOTAL_SIZE" >> $GITHUB_OUTPUT
+          
+          # Check for large files (>1MB)
+          LARGE_FILES=$(find dist -size +1M -type f || true)
+          if [ ! -z "$LARGE_FILES" ]; then
+            echo "Large files found:"
+            echo "$LARGE_FILES"
+            echo "large_files=true" >> $GITHUB_OUTPUT
+          else
+            echo "large_files=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Generate bundle report
+          echo "## 📦 Bundle Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total Size**: $TOTAL_SIZE" >> $GITHUB_STEP_SUMMARY
+          echo "- **Large Files (>1MB)**: ${{ steps.bundle-analysis.outputs.large_files == 'true' && 'Found' || 'None' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### File Sizes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat bundle-sizes.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+      
+      - name: Upload bundle analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-analysis
+          path: |
+            bundle-sizes.txt
+            dist/
+          retention-days: 7
+  
+  lighthouse-audit:
+    name: Lighthouse Performance Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build application
+        run: npm run build
+      
+      - name: Serve application
+        run: |
+          # Install serve if not present
+          npm install -g serve
+          
+          # Start server in background
+          serve -s dist -l 3000 &
+          
+          # Wait for server to start
+          sleep 5
+          
+          # Check if server is running
+          curl -f http://localhost:3000 || exit 1
+      
+      - name: Run Lighthouse CI
+        run: |
+          # Install Lighthouse CI
+          npm install -g @lhci/cli
+          
+          # Create Lighthouse configuration
+          cat > lighthouserc.js << 'EOF'
+          module.exports = {
+            ci: {
+              collect: {
+                url: ['http://localhost:3000'],
+                numberOfRuns: 3,
+                settings: {
+                  chromeFlags: '--no-sandbox --headless'
+                }
+              },
+              assert: {
+                assertions: {
+                  'categories:performance': ['warn', {minScore: 0.7}],
+                  'categories:accessibility': ['error', {minScore: 0.9}],
+                  'categories:best-practices': ['warn', {minScore: 0.8}],
+                  'categories:seo': ['warn', {minScore: 0.8}]
+                }
+              },
+              upload: {
+                target: 'temporary-public-storage'
+              }
+            }
+          };
+          EOF
+          
+          # Run Lighthouse CI
+          lhci autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+      
+      - name: Upload Lighthouse results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-results
+          path: |
+            .lighthouseci/
+          retention-days: 7
+  
+  load-testing:
+    name: Load Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'load'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build application
+        run: npm run build
+      
+      - name: Start application
+        run: |
+          # Start the application
+          npm install -g serve
+          serve -s dist -l 3000 &
+          sleep 5
+      
+      - name: Install load testing tools
+        run: |
+          # Install Artillery for load testing
+          npm install -g artillery@latest
+      
+      - name: Create load test configuration
+        run: |
+          cat > load-test.yml << 'EOF'
+          config:
+            target: 'http://localhost:3000'
+            phases:
+              - duration: 60
+                arrivalRate: 10
+                name: "Warm up"
+              - duration: 120
+                arrivalRate: 50
+                name: "Load test"
+              - duration: 60
+                arrivalRate: 100
+                name: "Spike test"
+            payload:
+              path: "./urls.csv"
+              fields:
+                - "url"
+          scenarios:
+            - name: "Load test scenarios"
+              weight: 100
+              flow:
+                - get:
+                    url: "/"
+                    capture:
+                      - json: "$.title"
+                        as: "title"
+                - think: 3
+                - get:
+                    url: "/{{ url }}"
+                    ifTrue: "{{ url }}"
+          EOF
+          
+          # Create URLs file
+          cat > urls.csv << 'EOF'
+          url
+          /
+          /about
+          /contact
+          EOF
+      
+      - name: Run load tests
+        id: load-test
+        run: |
+          # Run Artillery load test
+          artillery run load-test.yml --output load-test-results.json
+          
+          # Generate report
+          artillery report load-test-results.json --output load-test-report.html
+          
+          # Extract key metrics
+          if [ -f "load-test-results.json" ]; then
+            echo "Load test completed successfully"
+            
+            # Parse results (simplified - would need jq for complex parsing)
+            echo "Load test results saved"
+          else
+            echo "Load test failed"
+            exit 1
+          fi
+      
+      - name: Upload load test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: |
+            load-test-results.json
+            load-test-report.html
+          retention-days: 7
+  
+  memory-profiling:
+    name: Memory Profiling
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'memory'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install Puppeteer for memory profiling
+        run: npm install puppeteer
+      
+      - name: Create memory profiling script
+        run: |
+          cat > memory-profile.js << 'EOF'
+          const puppeteer = require('puppeteer');
+          const fs = require('fs');
+          
+          async function profileMemory() {
+            const browser = await puppeteer.launch({
+              headless: true,
+              args: ['--no-sandbox', '--disable-setuid-sandbox']
+            });
+            
+            const page = await browser.newPage();
+            
+            // Enable runtime and heap profiler
+            await page._client.send('Runtime.enable');
+            await page._client.send('HeapProfiler.enable');
+            
+            const results = [];
+            
+            try {
+              // Navigate to the app
+              await page.goto('http://localhost:3000', { waitUntil: 'networkidle0' });
+              
+              // Take initial heap snapshot
+              const initialHeap = await page._client.send('Runtime.getHeapUsage');
+              results.push({
+                action: 'Initial load',
+                heapUsed: initialHeap.usedSize,
+                heapTotal: initialHeap.totalSize
+              });
+              
+              // Simulate user interactions and measure memory
+              await page.click('body'); // Example interaction
+              await page.waitForTimeout(1000);
+              
+              const afterInteraction = await page._client.send('Runtime.getHeapUsage');
+              results.push({
+                action: 'After interaction',
+                heapUsed: afterInteraction.usedSize,
+                heapTotal: afterInteraction.totalSize
+              });
+              
+              // Force garbage collection and measure
+              await page._client.send('Runtime.collectGarbage');
+              await page.waitForTimeout(1000);
+              
+              const afterGC = await page._client.send('Runtime.getHeapUsage');
+              results.push({
+                action: 'After GC',
+                heapUsed: afterGC.usedSize,
+                heapTotal: afterGC.totalSize
+              });
+              
+              // Save results
+              fs.writeFileSync('memory-profile-results.json', JSON.stringify(results, null, 2));
+              
+              console.log('Memory profiling completed:');
+              results.forEach(result => {
+                console.log(`${result.action}: ${Math.round(result.heapUsed / 1024 / 1024)}MB used of ${Math.round(result.heapTotal / 1024 / 1024)}MB total`);
+              });
+              
+            } catch (error) {
+              console.error('Memory profiling failed:', error);
+              process.exit(1);
+            } finally {
+              await browser.close();
+            }
+          }
+          
+          profileMemory();
+          EOF
+      
+      - name: Build and serve application
+        run: |
+          npm run build
+          npm install -g serve
+          serve -s dist -l 3000 &
+          sleep 5
+      
+      - name: Run memory profiling
+        run: |
+          node memory-profile.js
+      
+      - name: Generate memory report
+        run: |
+          if [ -f "memory-profile-results.json" ]; then
+            echo "## 🧠 Memory Profile Report" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # Parse and display memory usage (simplified)
+            cat memory-profile-results.json | head -20 >> $GITHUB_STEP_SUMMARY || true
+            
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Analysis" >> $GITHUB_STEP_SUMMARY
+            echo "- Memory profiling completed successfully" >> $GITHUB_STEP_SUMMARY
+            echo "- Check artifacts for detailed results" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Upload memory profiling results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-profile-results
+          path: |
+            memory-profile-results.json
+          retention-days: 7
+  
+  performance-summary:
+    name: Performance Summary
+    runs-on: ubuntu-latest
+    needs: [bundle-analysis, lighthouse-audit, load-testing, memory-profiling]
+    if: always()
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: performance-results
+      
+      - name: Generate performance summary
+        run: |
+          echo "## 🚀 Performance Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "| Test Type | Status | Details |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Bundle Analysis | ${{ needs.bundle-analysis.result == 'success' && '✅ Passed' || '❌ Failed' }} | ${{ needs.bundle-analysis.outputs.total_size || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Lighthouse Audit | ${{ needs.lighthouse-audit.result == 'success' && '✅ Passed' || '❌ Failed' }} | Performance, Accessibility, SEO checks |" >> $GITHUB_STEP_SUMMARY
+          echo "| Load Testing | ${{ needs.load-testing.result == 'success' && '✅ Passed' || needs.load-testing.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | Concurrent user simulation |" >> $GITHUB_STEP_SUMMARY
+          echo "| Memory Profiling | ${{ needs.memory-profiling.result == 'success' && '✅ Passed' || needs.memory-profiling.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | Heap usage analysis |" >> $GITHUB_STEP_SUMMARY
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Recommendations" >> $GITHUB_STEP_SUMMARY
+          echo "- Review bundle size for optimization opportunities" >> $GITHUB_STEP_SUMMARY
+          echo "- Check Lighthouse recommendations for performance improvements" >> $GITHUB_STEP_SUMMARY
+          echo "- Monitor memory usage patterns for potential leaks" >> $GITHUB_STEP_SUMMARY
+          echo "- Validate load testing results against performance targets" >> $GITHUB_STEP_SUMMARY
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Review all performance artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Address any performance regressions" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Update performance baselines if needed" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Document performance optimizations" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Notify performance testing completion
+        run: |
+          npx claude-flow@alpha hooks notify --message "Performance testing completed - Bundle: ${{ needs.bundle-analysis.result }}, Lighthouse: ${{ needs.lighthouse-audit.result }}, Load: ${{ needs.load-testing.result }}, Memory: ${{ needs.memory-profiling.result }}"

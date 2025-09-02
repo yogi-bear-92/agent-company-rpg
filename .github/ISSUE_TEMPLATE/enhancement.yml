@@ -1,0 +1,149 @@
+name: 🚀 Enhancement
+description: Suggest an improvement to existing functionality
+title: "[ENHANCE] "
+labels: ["type:enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an enhancement! This template is for improvements to existing features.
+        For completely new features, please use the "Feature Request" template instead.
+
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: Current Behavior
+      description: Describe how the current functionality works
+      placeholder: How does the feature currently behave?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-improvement
+    attributes:
+      label: Proposed Improvement
+      description: Describe the specific improvement you'd like to see
+      placeholder: How should this be enhanced?
+    validations:
+      required: true
+
+  - type: textarea
+    id: benefits
+    attributes:
+      label: Benefits
+      description: What benefits would this enhancement provide?
+      placeholder: |
+        - Improved user experience
+        - Better performance
+        - Easier maintenance
+        - etc.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: enhancement-type
+    attributes:
+      label: Enhancement Type
+      description: What type of improvement is this?
+      options:
+        - Performance - Speed, efficiency, or resource optimization
+        - User Experience - Interface, usability, or workflow improvements
+        - Developer Experience - Code quality, maintainability, or tooling
+        - Functionality - Extending or refining existing features
+        - Accessibility - Making features more accessible to all users
+        - Security - Strengthening existing security measures
+        - Documentation - Improving existing documentation
+        - Testing - Enhancing test coverage or quality
+        - Configuration - Better configuration options or defaults
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority Level
+      description: How important is this enhancement?
+      options:
+        - Low - Nice to have improvement
+        - Medium - Noticeable benefit to users/developers
+        - High - Significant improvement to core functionality
+        - Critical - Essential for project success
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component Area
+      description: Which component would this enhancement affect?
+      options:
+        - Frontend - React UI components and interactions
+        - Backend - Server APIs and business logic
+        - Agent System - AI agent behavior and capabilities
+        - RPG Mechanics - Game systems and progression
+        - Knowledge System - Learning and memory features
+        - Token Economy - Rewards and economic systems
+        - Performance - System speed and optimization
+        - Security - Authentication and data protection
+        - Infrastructure - Deployment and scaling
+        - Documentation - Guides and API docs
+        - Testing - Test coverage and quality
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation-ideas
+    attributes:
+      label: Implementation Ideas
+      description: Do you have any ideas about how this enhancement could be implemented?
+      placeholder: Potential approaches or technical considerations...
+
+  - type: textarea
+    id: backwards-compatibility
+    attributes:
+      label: Backwards Compatibility
+      description: Would this enhancement break existing functionality or require migration?
+      placeholder: Consider impacts on existing users and data...
+
+  - type: textarea
+    id: testing-considerations
+    attributes:
+      label: Testing Considerations
+      description: What should be tested to ensure this enhancement works correctly?
+      placeholder: |
+        - Unit tests for new functionality
+        - Integration tests for affected workflows
+        - Performance benchmarks
+        - User acceptance testing
+
+  - type: textarea
+    id: documentation-needs
+    attributes:
+      label: Documentation Requirements
+      description: What documentation would need to be updated or created?
+      placeholder: User guides, API docs, README updates, etc.
+
+  - type: textarea
+    id: related-work
+    attributes:
+      label: Related Issues/PRs
+      description: Link to any related issues, pull requests, or discussions
+      placeholder: "Related to #123, builds on #456"
+
+  - type: checkboxes
+    id: enhancement-verification
+    attributes:
+      label: Pre-submission Checklist
+      description: Please verify the following before submitting
+      options:
+        - label: I have searched for existing enhancement requests similar to this one
+          required: true
+        - label: This enhancement improves existing functionality rather than adding new features
+          required: true
+        - label: I have considered the impact on existing users
+          required: true
+        - label: I am willing to help with testing or feedback if needed
+          required: false

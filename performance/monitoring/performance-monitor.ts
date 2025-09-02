@@ -1,373 +1,366 @@
 // Performance monitoring system for Agent Company RPG
-// Tracks Core Web Vitals, component performance, and user interactions
+// Tracks render times, memory usage, component performance, and bottlenecks
 
-export interface PerformanceMetrics {
-  // Core Web Vitals
-  fcp: number; // First Contentful Paint
-  lcp: number; // Largest Contentful Paint
-  fid: number; // First Input Delay
-  cls: number; // Cumulative Layout Shift
-  ttfb: number; // Time to First Byte
-  
-  // React-specific metrics
+export interface PerformanceMetric {
+  timestamp: number;
   renderTime: number;
-  componentCount: number;
-  rerenderCount: number;
-  stateUpdates: number;
-  
-  // Application-specific metrics
-  xpCalculationTime: number;
-  agentListRenderTime: number;
-  questFilterTime: number;
-  animationFrameDrops: number;
-  
-  // Memory usage
   heapUsed: number;
   heapTotal: number;
-  jsHeapSizeLimit: number;
-  
-  // Network
-  bundleLoadTime: number;
-  assetLoadTime: number;
-  
-  timestamp: number;
+  external: number;
+  componentCount: number;
+  requestCount?: number;
+  totalTransferSize?: number;
 }
 
-export interface PerformanceBudget {
-  fcp: number; // Target: < 1.8s
-  lcp: number; // Target: < 2.5s
-  fid: number; // Target: < 100ms
-  cls: number; // Target: < 0.1
-  renderTime: number; // Target: < 16ms per frame
-  bundleSize: number; // Target: < 200KB gzipped
+export interface PerformanceWarning {
+  timestamp: number;
+  metric: string;
+  current: number;
+  budget: number;
+  severity: 'low' | 'medium' | 'high';
+}
+
+export interface ComponentTiming {
+  component: string;
+  renderTime: number;
+  renderCount: number;
+  averageRenderTime: number;
+  lastRender: number;
+}
+
+export interface PerformanceReport {
+  current: PerformanceMetric | null;
+  history: PerformanceMetric[];
+  warnings: PerformanceWarning[];
+  componentTimings: ComponentTiming[];
+  summary: {
+    averageRenderTime: number;
+    peakMemoryUsage: number;
+    totalWarnings: number;
+    slowComponents: string[];
+  };
+}
+
+interface MemoryInfo {
+  usedJSHeapSize?: number;
+  totalJSHeapSize?: number;
+  jsHeapSizeLimit?: number;
 }
 
 class PerformanceMonitor {
-  private metrics: PerformanceMetrics[] = [];
-  private budget: PerformanceBudget = {
-    fcp: 1800,
-    lcp: 2500,
-    fid: 100,
-    cls: 0.1,
-    renderTime: 16,
-    bundleSize: 200 * 1024 // 200KB
-  };
+  private metrics: PerformanceMetric[] = [];
+  private warnings: PerformanceWarning[] = [];
+  private componentTimings: Map<string, ComponentTiming> = new Map();
+  private isMonitoring = false;
+  private monitoringInterval: number | null = null;
+  private maxHistorySize = 100;
   
-  private observers: {
-    performance?: PerformanceObserver;
-    mutation?: MutationObserver;
-    intersection?: IntersectionObserver;
-  } = {};
+  // Performance budgets (in milliseconds)
+  private budgets = {
+    renderTime: 16, // 60fps
+    componentRender: 8, // Individual component budget
+    memoryGrowth: 50 * 1024 * 1024, // 50MB memory growth warning
+  };
 
-  private renderTimings: { [component: string]: number[] } = {};
-  private rerenderCounts: { [component: string]: number } = {};
-
-  constructor() {
-    this.initializeObservers();
-    this.startMetricsCollection();
+  startMonitoring(interval = 1000): void {
+    if (this.isMonitoring) return;
+    
+    this.isMonitoring = true;
+    console.log('🚀 Performance monitoring started');
+    
+    // Initial metric collection
+    this.collectMetrics();
+    
+    // Start periodic monitoring
+    this.monitoringInterval = window.setInterval(() => {
+      this.collectMetrics();
+    }, interval);
   }
 
-  private initializeObservers() {
-    // Performance Observer for Core Web Vitals
-    if ('PerformanceObserver' in window) {
-      this.observers.performance = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          this.processPerformanceEntry(entry);
-        }
-      });
-
-      try {
-        this.observers.performance.observe({ 
-          entryTypes: ['paint', 'largest-contentful-paint', 'first-input', 'layout-shift', 'navigation']
-        });
-      } catch (e) {
-        console.warn('Performance Observer not fully supported:', e);
-      }
+  stopMonitoring(): void {
+    if (!this.isMonitoring) return;
+    
+    this.isMonitoring = false;
+    
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+      this.monitoringInterval = null;
     }
-
-    // Memory usage monitoring
-    this.startMemoryMonitoring();
+    
+    console.log('🛑 Performance monitoring stopped');
   }
 
-  private processPerformanceEntry(entry: PerformanceEntry) {
-    switch (entry.entryType) {
-      case 'paint':
-        if (entry.name === 'first-contentful-paint') {
-          this.updateMetric('fcp', entry.startTime);
-        }
-        break;
-      case 'largest-contentful-paint':
-        this.updateMetric('lcp', (entry as PerformancePaintTiming).startTime);
-        break;
-      case 'first-input':
-        const firstInputEntry = entry as PerformanceEventTiming;
-        this.updateMetric('fid', firstInputEntry.processingStart - entry.startTime);
-        break;
-      case 'layout-shift':
-        const layoutShiftEntry = entry as PerformanceEntry & { hadRecentInput: boolean; value: number };
-        if (!layoutShiftEntry.hadRecentInput) {
-          this.updateMetric('cls', layoutShiftEntry.value, true); // Cumulative
-        }
-        break;
+  collectMetrics(): PerformanceMetric {
+    const renderStartTime = performance.now();
+    
+    // Get memory information with type safety
+    const memInfo: MemoryInfo = (performance as any).memory || {
+      usedJSHeapSize: 0,
+      totalJSHeapSize: 0,
+      jsHeapSizeLimit: 0
+    };
+    
+    // Calculate render time (approximate)
+    const renderTime = performance.now() - renderStartTime;
+    
+    const metric: PerformanceMetric = {
+      timestamp: Date.now(),
+      renderTime,
+      heapUsed: memInfo.usedJSHeapSize || 0,
+      heapTotal: memInfo.totalJSHeapSize || 0,
+      external: memInfo.jsHeapSizeLimit || 0,
+      componentCount: this.componentTimings.size,
+      requestCount: this.getNetworkMetrics().requestCount,
+      totalTransferSize: this.getNetworkMetrics().totalTransferSize
+    };
+    
+    // Add to metrics history
+    this.metrics.push(metric);
+    
+    // Maintain history size
+    if (this.metrics.length > this.maxHistorySize) {
+      this.metrics.shift();
     }
+    
+    // Check for performance issues
+    this.checkPerformanceBudgets(metric);
+    
+    return metric;
   }
 
-  private updateMetric(key: keyof PerformanceMetrics, value: number, cumulative = false) {
-    const latestMetrics = this.getLatestMetrics();
-    if (cumulative) {
-      const currentValue = (latestMetrics as any)[key] as number || 0;
-      (latestMetrics as any)[key] = currentValue + value;
+  recordComponentTiming(componentName: string, renderTime: number): void {
+    const existing = this.componentTimings.get(componentName);
+    
+    if (existing) {
+      existing.renderCount++;
+      existing.renderTime += renderTime;
+      existing.averageRenderTime = existing.renderTime / existing.renderCount;
+      existing.lastRender = Date.now();
     } else {
-      (latestMetrics as any)[key] = value;
+      this.componentTimings.set(componentName, {
+        component: componentName,
+        renderTime,
+        renderCount: 1,
+        averageRenderTime: renderTime,
+        lastRender: Date.now()
+      });
+    }
+    
+    // Check component performance budget
+    if (renderTime > this.budgets.componentRender) {
+      this.logWarning(
+        `${componentName} render time`,
+        renderTime,
+        this.budgets.componentRender,
+        'medium'
+      );
     }
   }
 
-  private getLatestMetrics(): PerformanceMetrics {
-    if (this.metrics.length === 0) {
-      this.metrics.push(this.createInitialMetrics());
+  recordMetric(name: string, value: number, tags: Record<string, string> = {}): void {
+    // Store custom metrics for analysis
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`📊 ${name}: ${value.toFixed(2)}ms`, tags);
     }
-    return this.metrics[this.metrics.length - 1];
+    
+    // Check if this is a concerning metric
+    if (name.includes('render') && value > 32) {
+      this.logWarning(`Custom metric: ${name}`, value, 32, 'medium');
+    }
   }
 
-  private createInitialMetrics(): PerformanceMetrics {
-    return {
-      fcp: 0,
-      lcp: 0,
-      fid: 0,
-      cls: 0,
-      ttfb: 0,
-      renderTime: 0,
-      componentCount: 0,
-      rerenderCount: 0,
-      stateUpdates: 0,
-      xpCalculationTime: 0,
-      agentListRenderTime: 0,
-      questFilterTime: 0,
-      animationFrameDrops: 0,
-      heapUsed: 0,
-      heapTotal: 0,
-      jsHeapSizeLimit: 0,
-      bundleLoadTime: 0,
-      assetLoadTime: 0,
-      timestamp: performance.now()
+  logWarning(metric: string, current: number, budget: number, severity: PerformanceWarning['severity'] = 'medium'): void {
+    const warning: PerformanceWarning = {
+      timestamp: Date.now(),
+      metric,
+      current,
+      budget,
+      severity
     };
-  }
-
-  private startMemoryMonitoring() {
-    const collectMemoryStats = () => {
-      if ('memory' in performance) {
-        const memory = (performance as any).memory as {
-          usedJSHeapSize: number;
-          totalJSHeapSize: number;
-          jsHeapSizeLimit: number;
-        };
-        this.updateMetric('heapUsed', memory.usedJSHeapSize);
-        this.updateMetric('heapTotal', memory.totalJSHeapSize);
-        this.updateMetric('jsHeapSizeLimit', memory.jsHeapSizeLimit);
-      }
-    };
-
-    collectMemoryStats();
-    setInterval(collectMemoryStats, 5000); // Every 5 seconds
-  }
-
-  private startMetricsCollection() {
-    // Collect metrics every second
-    setInterval(() => {
-      this.collectCurrentMetrics();
-    }, 1000);
-
-    // Clean up old metrics (keep last 100 samples)
-    setInterval(() => {
-      if (this.metrics.length > 100) {
-        this.metrics = this.metrics.slice(-100);
-      }
-    }, 30000);
-  }
-
-  private collectCurrentMetrics() {
-    const now = performance.now();
-    const current = this.getLatestMetrics();
     
-    // Calculate frame rate and dropped frames
-    this.calculateFrameMetrics();
+    this.warnings.push(warning);
     
-    // Store snapshot
-    this.metrics.push({
-      ...current,
-      timestamp: now
-    });
-  }
-
-  private calculateFrameMetrics() {
-    // Track animation frame performance
-    const frameStart = performance.now();
-    requestAnimationFrame(() => {
-      const frameEnd = performance.now();
-      const frameDuration = frameEnd - frameStart;
-      
-      this.updateMetric('renderTime', frameDuration);
-      
-      if (frameDuration > 16.67) { // > 60fps
-        this.updateMetric('animationFrameDrops', 1, true);
-      }
-    });
-  }
-
-  // Public API for components to report performance
-  public measureComponentRender(componentName: string, renderStart: number) {
-    const renderEnd = performance.now();
-    const renderTime = renderEnd - renderStart;
-    
-    if (!this.renderTimings[componentName]) {
-      this.renderTimings[componentName] = [];
+    // Maintain warnings history
+    if (this.warnings.length > 50) {
+      this.warnings.shift();
     }
     
-    this.renderTimings[componentName].push(renderTime);
-    
-    // Keep only last 20 measurements
-    if (this.renderTimings[componentName].length > 20) {
-      this.renderTimings[componentName] = this.renderTimings[componentName].slice(-20);
+    // Log to console in development
+    if (process.env.NODE_ENV === 'development') {
+      const emoji = severity === 'high' ? '🚨' : severity === 'medium' ? '⚠️' : 'ℹ️';
+      console.warn(
+        `${emoji} Performance Warning: ${metric} - ${current.toFixed(1)} > ${budget} (${severity})`
+      );
+    }
+  }
+
+  private checkPerformanceBudgets(metric: PerformanceMetric): void {
+    // Check render time budget
+    if (metric.renderTime > this.budgets.renderTime) {
+      this.logWarning(
+        'Frame render time',
+        metric.renderTime,
+        this.budgets.renderTime,
+        'high'
+      );
     }
     
-    // Track rerender count
-    this.rerenderCounts[componentName] = (this.rerenderCounts[componentName] || 0) + 1;
+    // Check memory growth
+    if (this.metrics.length > 1) {
+      const previousMetric = this.metrics[this.metrics.length - 2];
+      const memoryGrowth = metric.heapUsed - previousMetric.heapUsed;
+      
+      if (memoryGrowth > this.budgets.memoryGrowth) {
+        this.logWarning(
+          'Memory growth',
+          memoryGrowth,
+          this.budgets.memoryGrowth,
+          'medium'
+        );
+      }
+    }
+  }
+
+  private getNetworkMetrics(): { requestCount: number; totalTransferSize: number } {
+    if (!('getEntriesByType' in performance)) {
+      return { requestCount: 0, totalTransferSize: 0 };
+    }
     
-    return renderTime;
-  }
-
-  public measureXpCalculation(startTime: number) {
-    const duration = performance.now() - startTime;
-    this.updateMetric('xpCalculationTime', duration);
-    return duration;
-  }
-
-  public measureAgentListRender(startTime: number) {
-    const duration = performance.now() - startTime;
-    this.updateMetric('agentListRenderTime', duration);
-    return duration;
-  }
-
-  public measureQuestFilter(startTime: number) {
-    const duration = performance.now() - startTime;
-    this.updateMetric('questFilterTime', duration);
-    return duration;
-  }
-
-  public trackStateUpdate() {
-    this.updateMetric('stateUpdates', 1, true);
-  }
-
-  // Analytics and reporting
-  public getPerformanceReport() {
-    const latest = this.getLatestMetrics();
-    const warnings = this.checkBudgetViolations(latest);
+    const entries = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
     
     return {
-      current: latest,
-      budget: this.budget,
-      warnings,
-      componentTimings: this.getComponentReport(),
-      recommendations: this.generateRecommendations(latest, warnings)
+      requestCount: entries.length,
+      totalTransferSize: entries.reduce((total, entry) => total + (entry.transferSize || 0), 0)
     };
   }
 
-  private checkBudgetViolations(metrics: PerformanceMetrics) {
-    const violations = [];
+  getPerformanceReport(): PerformanceReport {
+    const current = this.metrics.length > 0 ? this.metrics[this.metrics.length - 1] : null;
     
-    if (metrics.fcp > this.budget.fcp) {
-      violations.push({ metric: 'fcp', current: metrics.fcp, budget: this.budget.fcp });
-    }
-    if (metrics.lcp > this.budget.lcp) {
-      violations.push({ metric: 'lcp', current: metrics.lcp, budget: this.budget.lcp });
-    }
-    if (metrics.fid > this.budget.fid) {
-      violations.push({ metric: 'fid', current: metrics.fid, budget: this.budget.fid });
-    }
-    if (metrics.cls > this.budget.cls) {
-      violations.push({ metric: 'cls', current: metrics.cls, budget: this.budget.cls });
-    }
-    if (metrics.renderTime > this.budget.renderTime) {
-      violations.push({ metric: 'renderTime', current: metrics.renderTime, budget: this.budget.renderTime });
-    }
+    // Calculate summary statistics
+    const renderTimes = this.metrics.map(m => m.renderTime);
+    const memoryUsages = this.metrics.map(m => m.heapUsed);
     
-    return violations;
+    const averageRenderTime = renderTimes.length > 0 
+      ? renderTimes.reduce((a, b) => a + b, 0) / renderTimes.length 
+      : 0;
+      
+    const peakMemoryUsage = memoryUsages.length > 0 
+      ? Math.max(...memoryUsages) 
+      : 0;
+    
+    // Find slow components
+    const slowComponents = Array.from(this.componentTimings.values())
+      .filter(timing => timing.averageRenderTime > this.budgets.componentRender)
+      .map(timing => timing.component);
+    
+    return {
+      current,
+      history: [...this.metrics],
+      warnings: [...this.warnings],
+      componentTimings: Array.from(this.componentTimings.values()),
+      summary: {
+        averageRenderTime,
+        peakMemoryUsage,
+        totalWarnings: this.warnings.length,
+        slowComponents
+      }
+    };
   }
 
-  private getComponentReport() {
-    return Object.entries(this.renderTimings).map(([component, timings]) => ({
-      component,
-      averageRenderTime: timings.reduce((sum, time) => sum + time, 0) / timings.length,
-      maxRenderTime: Math.max(...timings),
-      minRenderTime: Math.min(...timings),
-      renderCount: this.rerenderCounts[component] || 0,
-      lastRenderTime: timings[timings.length - 1] || 0
-    }));
-  }
-
-  private generateRecommendations(metrics: PerformanceMetrics, warnings: Array<{ metric: string; current: number; budget: number }>) {
-    const recommendations = [];
-    
-    if (warnings.some(w => w.metric === 'renderTime')) {
-      recommendations.push('Consider memoizing expensive components with React.memo()');
-      recommendations.push('Implement useMemo() for heavy calculations');
-      recommendations.push('Use useCallback() for event handlers');
-    }
-    
-    if (metrics.componentCount > 50) {
-      recommendations.push('Implement virtual scrolling for large lists');
-      recommendations.push('Consider lazy loading for off-screen components');
-    }
-    
-    if (metrics.stateUpdates > 100) {
-      recommendations.push('Optimize state structure to reduce unnecessary updates');
-      recommendations.push('Use state management library for complex state');
-    }
-    
-    if (this.rerenderCounts.App > 10) {
-      recommendations.push('Split App component into smaller, focused components');
-      recommendations.push('Move state closer to components that need it');
-    }
-    
-    return recommendations;
-  }
-
-  public getMetrics() {
-    return [...this.metrics];
-  }
-
-  public clearMetrics() {
+  clearMetrics(): void {
     this.metrics = [];
-    this.renderTimings = {};
-    this.rerenderCounts = {};
+    this.warnings = [];
+    this.componentTimings.clear();
+    console.log('🗑️ Performance metrics cleared');
   }
 
-  public setBudget(newBudget: Partial<PerformanceBudget>) {
-    this.budget = { ...this.budget, ...newBudget };
+  // Utility method to get current performance snapshot
+  getCurrentSnapshot(): {
+    renderTime: number;
+    memoryUsage: number;
+    componentCount: number;
+    warningCount: number;
+  } {
+    const current = this.metrics[this.metrics.length - 1];
+    return {
+      renderTime: current?.renderTime || 0,
+      memoryUsage: current?.heapUsed || 0,
+      componentCount: this.componentTimings.size,
+      warningCount: this.warnings.length
+    };
   }
 
-  public destroy() {
-    Object.values(this.observers).forEach(observer => {
-      if (observer && 'disconnect' in observer) {
-        observer.disconnect();
-      }
-    });
+  // Export data for external analysis
+  exportData(): {
+    metrics: PerformanceMetric[];
+    warnings: PerformanceWarning[];
+    componentTimings: ComponentTiming[];
+    timestamp: string;
+  } {
+    return {
+      metrics: [...this.metrics],
+      warnings: [...this.warnings],
+      componentTimings: Array.from(this.componentTimings.values()),
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  // Set custom performance budgets
+  setBudgets(budgets: Partial<typeof this.budgets>): void {
+    this.budgets = { ...this.budgets, ...budgets };
+    console.log('📋 Performance budgets updated:', this.budgets);
+  }
+
+  // Get performance grade based on metrics
+  getPerformanceGrade(): { score: number; grade: string; issues: string[] } {
+    let score = 100;
+    const issues: string[] = [];
+    
+    // Deduct points for warnings
+    const highWarnings = this.warnings.filter(w => w.severity === 'high').length;
+    const mediumWarnings = this.warnings.filter(w => w.severity === 'medium').length;
+    
+    score -= highWarnings * 15;
+    score -= mediumWarnings * 5;
+    
+    if (highWarnings > 0) issues.push(`${highWarnings} critical performance issues`);
+    if (mediumWarnings > 3) issues.push(`${mediumWarnings} performance warnings`);
+    
+    // Deduct points for slow average render time
+    const report = this.getPerformanceReport();
+    if (report.summary.averageRenderTime > this.budgets.renderTime) {
+      score -= 20;
+      issues.push('Slow average render time');
+    }
+    
+    // Deduct points for slow components
+    if (report.summary.slowComponents.length > 0) {
+      score -= report.summary.slowComponents.length * 10;
+      issues.push(`${report.summary.slowComponents.length} slow components`);
+    }
+    
+    score = Math.max(0, score);
+    
+    let grade = 'A';
+    if (score < 90) grade = 'B';
+    if (score < 80) grade = 'C';
+    if (score < 70) grade = 'D';
+    if (score < 60) grade = 'F';
+    
+    return { score, grade, issues };
   }
 }
 
-// Global performance monitor instance
+// Export singleton instance
 export const performanceMonitor = new PerformanceMonitor();
 
-// React hook for performance monitoring
-export function usePerformanceMonitor() {
-  return {
-    measureRender: performanceMonitor.measureComponentRender.bind(performanceMonitor),
-    measureXpCalc: performanceMonitor.measureXpCalculation.bind(performanceMonitor),
-    measureAgentList: performanceMonitor.measureAgentListRender.bind(performanceMonitor),
-    measureQuestFilter: performanceMonitor.measureQuestFilter.bind(performanceMonitor),
-    trackStateUpdate: performanceMonitor.trackStateUpdate.bind(performanceMonitor),
-    getReport: performanceMonitor.getPerformanceReport.bind(performanceMonitor)
-  };
+// Auto-start monitoring in development
+if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+  // Small delay to avoid startup performance impact
+  setTimeout(() => {
+    performanceMonitor.startMonitoring();
+  }, 1000);
 }
 
 export default performanceMonitor;

@@ -1,34 +1,43 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import AppOptimized from './App-optimized.tsx'
-import './index.css'
-import './styles/levelProgression.css'
-import { PerformanceProvider } from '../performance/integration/performance-provider'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { performanceMonitor } from '../performance/monitoring/performance-monitor';
+import { webVitalsDashboard } from '../performance/monitoring/web-vitals';
+import AppOptimized from './App-optimized';
+import './index.css';
 
-// Initialize performance monitoring immediately
-import { performanceMonitor } from '../performance/monitoring/performance-monitor'
+// Initialize performance monitoring
+performanceMonitor.startMonitoring();
 
-// Start performance tracking before React renders
-const appStartTime = performance.now();
+// Initialize web vitals monitoring for production insights
+if (process.env.NODE_ENV === 'production') {
+  webVitalsDashboard.startTracking();
+}
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <PerformanceProvider enableInProduction={false}>
-      <AppOptimized />
-    </PerformanceProvider>
-  </StrictMode>,
-)
+// Create root with performance tracking
+const startTime = performance.now();
 
-// Log initial app startup time
-window.addEventListener('load', () => {
-  const loadTime = performance.now() - appStartTime;
-  console.log(`App initialization completed in ${loadTime.toFixed(2)}ms`);
-  
-  // Store performance data in memory after initial load
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <AppOptimized />
+  </React.StrictMode>
+);
+
+// Track initial render performance
+const renderTime = performance.now() - startTime;
+performanceMonitor.recordMetric('initial-render', renderTime);
+
+if (renderTime > 100) {
+  console.warn(`Slow initial render detected: ${renderTime.toFixed(2)}ms`);
+}
+
+// Log performance summary in development
+if (process.env.NODE_ENV === 'development') {
   setTimeout(() => {
     const report = performanceMonitor.getPerformanceReport();
-    if (window.location.search.includes('debug=performance')) {
-      console.table(report.current);
-    }
+    console.info('Performance Summary:', {
+      initialRender: `${renderTime.toFixed(2)}ms`,
+      current: report.current,
+      warnings: report.warnings.length
+    });
   }, 1000);
-});
+}

@@ -1,0 +1,129 @@
+name: 🐛 Bug Report
+description: Report a bug or issue with the Agent RPG Project
+title: "[BUG] "
+labels: ["type:bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out this form as completely as possible.
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe what happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+      placeholder: Describe what should have happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: A clear and concise description of what actually happened.
+      placeholder: Describe what actually happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority Level
+      description: How critical is this bug?
+      options:
+        - Low - Minor issue, doesn't affect core functionality
+        - Medium - Affects functionality but has workarounds
+        - High - Affects core functionality significantly
+        - Critical - Blocks development or causes data loss
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component Affected
+      description: Which component of the system is affected?
+      options:
+        - Frontend - React UI components
+        - Backend - Server/API functionality
+        - Database - Data storage/retrieval
+        - Agent System - AI agent behavior
+        - RPG Mechanics - Game logic and progression
+        - Knowledge System - Learning and memory
+        - Security - Authentication/authorization
+        - Infrastructure - DevOps/deployment
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Information
+      description: Information about your environment
+      placeholder: |
+        - OS: [e.g. macOS 14.0, Windows 11, Ubuntu 22.04]
+        - Browser: [e.g. Chrome 119, Firefox 120, Safari 17]
+        - Node.js Version: [e.g. 18.17.0]
+        - NPM Version: [e.g. 9.8.1]
+        - Project Version: [e.g. 1.0.0]
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-logs
+    attributes:
+      label: Error Messages/Logs
+      description: Include any error messages, console output, or relevant logs
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots/Videos
+      description: If applicable, add screenshots or videos to help explain your problem
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here
+
+  - type: checkboxes
+    id: verification
+    attributes:
+      label: Pre-submission Checklist
+      description: Please verify the following before submitting
+      options:
+        - label: I have searched for existing issues similar to this one
+          required: true
+        - label: I have provided all the required information above
+          required: true
+        - label: I have tested this on the latest version
+          required: false
+        - label: I can consistently reproduce this issue
+          required: false

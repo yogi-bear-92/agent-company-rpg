@@ -1,0 +1,117 @@
+title = "gitleaks config for Agent RPG Project"
+
+[extend]
+path = "https://raw.githubusercontent.com/gitleaks/gitleaks/master/config/gitleaks.toml"
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(api_key|apikey|secret_key|secret)\s*[:=]\s*["']?[a-zA-Z0-9]{20,}["']?'''
+keywords = [
+    "api_key",
+    "apikey",
+    "secret_key",
+    "secret",
+]
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API Key"
+regex = '''sk-[a-zA-Z0-9]{20,}'''
+keywords = [
+    "openai",
+    "sk-",
+]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API Key"
+regex = '''sk-ant-[a-zA-Z0-9\-_]{95}'''
+keywords = [
+    "anthropic",
+    "sk-ant-",
+]
+
+[[rules]]
+id = "github-token"
+description = "GitHub Token"
+regex = '''gh[pousr]_[A-Za-z0-9_]{36}'''
+keywords = [
+    "github",
+    "gh_",
+    "gho_",
+    "ghu_",
+    "ghs_",
+    "ghr_",
+]
+
+[[rules]]
+id = "jwt-token"
+description = "JWT Token"
+regex = '''eyJ[A-Za-z0-9_/+-]*\.eyJ[A-Za-z0-9_/+-]*\.[A-Za-z0-9_/+-]*'''
+keywords = [
+    "jwt",
+    "token",
+]
+
+[[rules]]
+id = "private-key"
+description = "Private Key"
+regex = '''-----BEGIN [A-Z]+ PRIVATE KEY-----'''
+keywords = [
+    "private key",
+    "BEGIN",
+]
+
+[[rules]]
+id = "aws-access-key"
+description = "AWS Access Key"
+regex = '''AKIA[0-9A-Z]{16}'''
+keywords = [
+    "aws",
+    "AKIA",
+]
+
+[[rules]]
+id = "google-api-key"
+description = "Google API Key"
+regex = '''AIza[0-9A-Za-z\-_]{35}'''
+keywords = [
+    "google",
+    "AIza",
+]
+
+# Allow specific patterns for development
+[allowlist]
+description = "Allowlist for development patterns"
+paths = [
+    '''.*\.md$''',
+    '''.*\.example$''',
+    '''.*/test/.*''',
+    '''.*/tests/.*''',
+    '''.*/mock/.*''',
+    '''.*/fixtures/.*''',
+]
+regexes = [
+    '''example|placeholder|dummy|fake|mock|test''',
+    '''sk-[a-zA-Z0-9]{20,}\s*#\s*(example|placeholder|dummy|fake|mock|test)''',
+]
+
+# Custom rules for project-specific patterns
+[[rules]]
+id = "mcp-server-config"
+description = "MCP Server Configuration"
+regex = '''(mcp_server_token|mcp_api_key)\s*[:=]\s*["']?[a-zA-Z0-9]{32,}["']?'''
+keywords = [
+    "mcp_server_token",
+    "mcp_api_key",
+]
+
+[[rules]]
+id = "claude-flow-api-key"
+description = "Claude Flow API Key"
+regex = '''cf_[a-zA-Z0-9]{32,}'''
+keywords = [
+    "claude_flow",
+    "cf_",
+]

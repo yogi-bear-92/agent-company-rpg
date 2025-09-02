@@ -201,6 +201,7 @@ export default function AgentSheet({ agent, onClose, onAgentUpdate, onMissionAss
             </div>
             <button
               onClick={onClose}
+              tabIndex={2}
               className="text-slate-400 hover:text-white text-xl p-2 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-800 rounded"
               aria-label="Close agent details"
             >
@@ -276,6 +277,7 @@ export default function AgentSheet({ agent, onClose, onAgentUpdate, onMissionAss
                 <button
                   onClick={() => onMissionAssign(agent)}
                   disabled={agent.currentMission !== 'Available for Mission'}
+                  tabIndex={1}
                   className={`px-4 py-2 rounded-lg transition-colors ${
                     agent.currentMission === 'Available for Mission'
                       ? 'bg-green-600 hover:bg-green-500 text-white'

@@ -1,0 +1,163 @@
+name: 🤖 Issue Management Automation
+
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: '0 9 * * 1'  # Weekly maintenance on Mondays at 9 AM UTC
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  auto-label-issues:
+    name: Auto-label New Issues
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    steps:
+      - name: Auto-assign priority based on keywords
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title.toLowerCase();
+            const body = issue.body?.toLowerCase() || '';
+            const currentLabels = issue.labels.map(label => label.name);
+            
+            let labelsToAdd = [];
+            
+            // Auto-assign priority based on keywords
+            if (title.includes('critical') || body.includes('critical') || title.includes('urgent')) {
+              labelsToAdd.push('priority:critical');
+            } else if (title.includes('high') || body.includes('blocking') || title.includes('security')) {
+              labelsToAdd.push('priority:high');
+            } else if (title.includes('medium') || body.includes('important')) {
+              labelsToAdd.push('priority:medium');
+            } else if (title.includes('low') || title.includes('nice to have')) {
+              labelsToAdd.push('priority:low');
+            }
+            
+            // Auto-assign component labels
+            if (title.includes('ui') || title.includes('frontend') || title.includes('react')) {
+              labelsToAdd.push('component:frontend');
+            }
+            if (title.includes('api') || title.includes('backend') || title.includes('server')) {
+              labelsToAdd.push('component:backend');
+            }
+            if (title.includes('agent') || title.includes('ai')) {
+              labelsToAdd.push('feature:agent-system');
+            }
+            if (title.includes('rpg') || title.includes('game') || title.includes('progression')) {
+              labelsToAdd.push('feature:rpg-mechanics');
+            }
+            if (title.includes('knowledge') || title.includes('learning') || title.includes('memory')) {
+              labelsToAdd.push('feature:knowledge-system');
+            }
+            if (title.includes('token') || title.includes('economy') || title.includes('reward')) {
+              labelsToAdd.push('feature:token-economy');
+            }
+            if (title.includes('security') || title.includes('auth')) {
+              labelsToAdd.push('type:security');
+            }
+            if (title.includes('performance') || title.includes('slow') || title.includes('optimization')) {
+              labelsToAdd.push('type:performance');
+            }
+            
+            // Filter out labels that already exist
+            const newLabels = labelsToAdd.filter(label => !currentLabels.includes(label));
+            
+            if (newLabels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: newLabels
+              });
+              
+              console.log(`Added labels: ${newLabels.join(', ')}`);
+            }
+
+  assign-based-on-labels:
+    name: Auto-assign Issues Based on Labels
+    runs-on: ubuntu-latest
+    if: github.event.action == 'labeled'
+    steps:
+      - name: Assign issues to team members
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = context.payload.label.name;
+            const issue = context.payload.issue;
+            
+            // Define team member specializations
+            const assignments = {
+              'component:frontend': ['yogi-bear-92'],
+              'component:backend': ['yogi-bear-92'],
+              'feature:agent-system': ['yogi-bear-92'],
+              'type:security': ['yogi-bear-92'],
+              'priority:critical': ['yogi-bear-92'],
+            };
+            
+            if (assignments[label] && !issue.assignee) {
+              const assignees = assignments[label];
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                assignees: assignees
+              });
+              
+              console.log(`Assigned issue #${issue.number} to ${assignees.join(', ')}`);
+            }
+
+  stale-issue-management:
+    name: Manage Stale Issues
+    runs-on: ubuntu-latest
+    if: github.event.schedule
+    steps:
+      - name: Mark stale issues
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: |
+            This issue has been automatically marked as stale because it has not had recent activity. 
+            It will be closed if no further activity occurs within 7 days.
+            
+            If this issue is still relevant, please:
+            - Add a comment to keep it open
+            - Add the `keep-open` label
+            - Update the issue with current information
+            
+            Thank you for your contributions!
+          close-issue-message: |
+            This issue has been automatically closed due to inactivity.
+            If you believe this was closed in error, please reopen it or create a new issue with updated information.
+          stale-issue-label: 'status:stale'
+          close-issue-label: 'status:closed-stale'
+          days-before-stale: 60
+          days-before-close: 7
+          exempt-issue-labels: 'priority:critical,priority:high,keep-open,in-progress'
+          exempt-assignee: true
+
+  issue-metrics:
+    name: Update Issue Metrics
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened' || github.event.action == 'closed'
+    steps:
+      - name: Update project metrics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // This could be extended to update project boards, send notifications, etc.
+            const action = context.payload.action;
+            const issue = context.payload.issue;
+            
+            console.log(`Issue #${issue.number} was ${action}`);
+            console.log(`Title: ${issue.title}`);
+            console.log(`Labels: ${issue.labels.map(l => l.name).join(', ')}`);
+            
+            // Future: Add metrics to project database, send Slack notifications, etc.

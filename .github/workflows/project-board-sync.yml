@@ -1,0 +1,177 @@
+name: 📋 Project Board Synchronization
+
+on:
+  issues:
+    types: [opened, closed, reopened, labeled, unlabeled, assigned, unassigned]
+  pull_request:
+    types: [opened, closed, reopened, ready_for_review, converted_to_draft]
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+  repository-projects: write
+
+jobs:
+  sync-to-project-board:
+    name: Sync Issues to Project Board
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add issue to project board
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issueNumber = context.payload.issue?.number || context.payload.pull_request?.number;
+            
+            if (!issueNumber) return;
+            
+            // Get the item (issue or PR)
+            const item = context.payload.issue || context.payload.pull_request;
+            const itemType = context.payload.issue ? 'Issue' : 'PullRequest';
+            
+            console.log(`Processing ${itemType} #${issueNumber}: ${item.title}`);
+            
+            // Define project board columns based on labels and state
+            const getColumnForItem = (item) => {
+              const labels = item.labels?.map(l => l.name) || [];
+              const state = item.state;
+              
+              if (state === 'closed') {
+                return 'Done';
+              }
+              
+              if (labels.includes('in-progress') || item.assignee) {
+                return 'In Progress';
+              }
+              
+              if (labels.includes('needs-review') || (itemType === 'PullRequest' && !item.draft)) {
+                return 'Review';
+              }
+              
+              if (labels.includes('priority:critical') || labels.includes('priority:high')) {
+                return 'High Priority';
+              }
+              
+              return 'Backlog';
+            };
+            
+            const targetColumn = getColumnForItem(item);
+            console.log(`Target column: ${targetColumn}`);
+            
+            // This is a placeholder for actual project board API calls
+            // In a real implementation, you would use GitHub's Projects API v2
+            // to add items to specific project boards and columns
+
+  update-issue-status:
+    name: Update Issue Status Based on Activity
+    runs-on: ubuntu-latest
+    if: github.event.action == 'assigned' || github.event_name == 'issue_comment'
+    steps:
+      - name: Update status labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            if (!issue) return;
+            
+            const currentLabels = issue.labels.map(label => label.name);
+            let labelsToAdd = [];
+            let labelsToRemove = [];
+            
+            // If issue was assigned, mark as in-progress
+            if (context.payload.action === 'assigned') {
+              if (!currentLabels.includes('in-progress')) {
+                labelsToAdd.push('in-progress');
+              }
+              labelsToRemove = labelsToRemove.concat(['needs-triage', 'status:stale']);
+            }
+            
+            // If there's a new comment, remove stale status
+            if (context.event_name === 'issue_comment') {
+              labelsToRemove = labelsToRemove.concat(['status:stale']);
+            }
+            
+            // Remove labels
+            for (const labelToRemove of labelsToRemove) {
+              if (currentLabels.includes(labelToRemove)) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: labelToRemove
+                });
+                console.log(`Removed label: ${labelToRemove}`);
+              }
+            }
+            
+            // Add labels
+            if (labelsToAdd.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: labelsToAdd
+              });
+              console.log(`Added labels: ${labelsToAdd.join(', ')}`);
+            }
+
+  milestone-automation:
+    name: Auto-assign Milestones
+    runs-on: ubuntu-latest
+    if: github.event.action == 'labeled'
+    steps:
+      - name: Assign milestone based on priority and component
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const label = context.payload.label.name;
+            
+            // Don't assign milestone if already assigned
+            if (issue.milestone) return;
+            
+            let milestoneTitle = null;
+            
+            // Assign based on feature labels
+            if (label === 'feature:rpg-mechanics') {
+              milestoneTitle = 'RPG Core Features';
+            } else if (label === 'feature:knowledge-system') {
+              milestoneTitle = 'Knowledge & Learning System';
+            } else if (label === 'feature:agent-system') {
+              milestoneTitle = 'Agent Intelligence';
+            } else if (label === 'feature:token-economy') {
+              milestoneTitle = 'Token Economy';
+            } else if (label === 'type:security') {
+              milestoneTitle = 'Security & Privacy';
+            } else if (label === 'priority:critical') {
+              milestoneTitle = 'Critical Fixes';
+            }
+            
+            if (milestoneTitle) {
+              try {
+                // Get all milestones
+                const milestones = await github.rest.issues.listMilestones({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open'
+                });
+                
+                const milestone = milestones.data.find(m => m.title === milestoneTitle);
+                
+                if (milestone) {
+                  await github.rest.issues.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    milestone: milestone.number
+                  });
+                  
+                  console.log(`Assigned issue to milestone: ${milestoneTitle}`);
+                }
+              } catch (error) {
+                console.log(`Could not assign milestone: ${error.message}`);
+              }
+            }

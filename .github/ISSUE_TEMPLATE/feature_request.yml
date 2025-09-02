@@ -1,0 +1,139 @@
+name: ✨ Feature Request
+description: Suggest a new feature for the Agent RPG Project
+title: "[FEATURE] "
+labels: ["type:enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please provide as much detail as possible.
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Feature Description
+      description: A clear and concise description of the feature you'd like to see implemented.
+      placeholder: Describe the feature...
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? What pain point does it address?
+      placeholder: Describe the problem this feature would solve...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: Describe your proposed solution in detail.
+      placeholder: How should this feature work?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternative-solutions
+    attributes:
+      label: Alternative Solutions
+      description: Describe any alternative solutions or features you've considered.
+      placeholder: What other approaches could work?
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority Level
+      description: How important is this feature?
+      options:
+        - Low - Nice to have, not urgent
+        - Medium - Would improve user experience
+        - High - Important for core functionality
+        - Critical - Essential for project success
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component Area
+      description: Which area of the system would this feature affect?
+      options:
+        - Frontend - User interface and experience
+        - Backend - Server logic and APIs
+        - Agent System - AI agent capabilities
+        - RPG Mechanics - Game systems and progression
+        - Knowledge System - Learning and memory features
+        - Token Economy - Rewards and incentives
+        - Security - Authentication and privacy
+        - Performance - Speed and optimization
+        - Infrastructure - Deployment and scaling
+        - Documentation - Guides and references
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Implementation Complexity
+      description: How complex do you think this feature would be to implement?
+      options:
+        - Simple - Small change, low complexity
+        - Moderate - Requires some planning and effort
+        - Complex - Significant development effort required
+        - Epic - Large feature requiring multiple iterations
+      default: 1
+    validations:
+      required: true
+
+  - type: textarea
+    id: user-stories
+    attributes:
+      label: User Stories
+      description: Write user stories for this feature (As a [user], I want [goal] so that [benefit])
+      placeholder: |
+        As a player, I want to track my learning progress so that I can see how my agent improves over time.
+        As a developer, I want automated testing so that I can deploy with confidence.
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: What criteria must be met for this feature to be considered complete?
+      placeholder: |
+        - [ ] Feature works as described
+        - [ ] Tests are written and passing
+        - [ ] Documentation is updated
+        - [ ] Performance impact is acceptable
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: Mockups/Wireframes
+      description: If applicable, add mockups, wireframes, or visual references
+
+  - type: textarea
+    id: related-issues
+    attributes:
+      label: Related Issues
+      description: Link to any related issues or pull requests
+      placeholder: "Relates to #123, depends on #456"
+
+  - type: checkboxes
+    id: feature-verification
+    attributes:
+      label: Pre-submission Checklist
+      description: Please verify the following before submitting
+      options:
+        - label: I have searched for existing feature requests similar to this one
+          required: true
+        - label: This feature aligns with the project's goals and vision
+          required: true
+        - label: I have provided clear acceptance criteria
+          required: true
+        - label: I am willing to contribute to the implementation if needed
+          required: false

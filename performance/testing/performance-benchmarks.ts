@@ -263,7 +263,7 @@ export class PerformanceBenchmark {
 
   private getMemoryUsage(): number {
     if ('memory' in performance) {
-      return (performance as any).memory.usedJSHeapSize;
+      return (performance as unknown).memory.usedJSHeapSize;
     }
     return 0;
   }

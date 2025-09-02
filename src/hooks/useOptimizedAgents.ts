@@ -1,230 +1,253 @@
-// Optimized agents hook with performance enhancements
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+// Optimized hooks for agent management with performance monitoring
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Agent } from '../types/agent';
-import { initialAgents } from '../data/agents';
 import { performanceMonitor } from '../../performance/monitoring/performance-monitor';
 
-export interface UseOptimizedAgentsReturn {
-  agents: Agent[];
-  filteredAgents: Agent[];
-  selectedAgent: Agent | null;
-  searchQuery: string;
-  sortBy: string;
-  
-  // Actions
-  updateAgent: (agentId: number, updates: Partial<Agent>) => void;
-  selectAgent: (agent: Agent | null) => void;
-  setSearchQuery: (query: string) => void;
-  setSortBy: (sortBy: string) => void;
-  batchUpdateAgents: (updates: Array<{ id: number; updates: Partial<Agent> }>) => void;
-  
-  // Performance metrics
-  renderMetrics: {
-    lastRenderTime: number;
-    rerenderCount: number;
-    filteredCount: number;
-  };
+interface UseOptimizedAgentsOptions {
+  enableFiltering?: boolean;
+  enableSorting?: boolean;
+  batchSize?: number;
 }
 
-export function useOptimizedAgents(): UseOptimizedAgentsReturn {
-  const [agents, setAgents] = useState<Agent[]>(initialAgents);
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('level');
-  
-  // Performance tracking
-  const renderCountRef = useRef(0);
-  const lastRenderTimeRef = useRef(0);
-  const filterStartTimeRef = useRef(0);
+interface OptimizedAgentsState {
+  agents: Agent[];
+  loading: boolean;
+  error: string | null;
+  filteredAgents: Agent[];
+  sortedAgents: Agent[];
+}
 
-  // Memoized filtering and sorting with performance measurement
-  const filteredAgents = useMemo(() => {
-    filterStartTimeRef.current = performance.now();
-    
-    let filtered = agents;
-    
-    // Search filtering
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = agents.filter(agent => 
-        agent.name.toLowerCase().includes(query) ||
-        agent.class.toLowerCase().includes(query) ||
-        agent.specializations.some(spec => spec.toLowerCase().includes(query)) ||
-        agent.currentMission.toLowerCase().includes(query)
-      );
-    }
-    
-    // Sorting with optimized comparisons
-    const sorted = [...filtered].sort((a, b) => {
-      switch (sortBy) {
-        case 'name':
-          return a.name.localeCompare(b.name);
-        case 'level':
-          return b.level - a.level; // Descending
-        case 'class':
-          return a.class.localeCompare(b.class);
-        case 'xp':
-          return b.xp - a.xp; // Descending
-        case 'activity':
-          const aLastActivity = a.realtimeActivity[0]?.timestamp || '';
-          const bLastActivity = b.realtimeActivity[0]?.timestamp || '';
-          return bLastActivity.localeCompare(aLastActivity); // Most recent first
-        default:
-          return 0;
-      }
-    });
-    
-    // Measure filter performance
-    performanceMonitor.measureQuestFilter(filterStartTimeRef.current);
-    
-    return sorted;
-  }, [agents, searchQuery, sortBy]);
+export function useOptimizedAgents(
+  initialAgents: Agent[] = [],
+  options: UseOptimizedAgentsOptions = {}
+) {
+  const {
+    enableFiltering = true,
+    enableSorting = true,
+    batchSize = 20
+  } = options;
 
-  // Track render performance
-  useEffect(() => {
-    const renderStart = performance.now();
-    renderCountRef.current++;
-    
-    // Measure render time after DOM update
-    const measureRender = () => {
-      const renderTime = performance.now() - renderStart;
-      lastRenderTimeRef.current = renderTime;
-      performanceMonitor.measureComponentRender('useOptimizedAgents', renderStart);
-    };
-    
-    // Use setTimeout to measure after React's commit phase
-    setTimeout(measureRender, 0);
+  const [state, setState] = useState<OptimizedAgentsState>({
+    agents: initialAgents,
+    loading: false,
+    error: null,
+    filteredAgents: initialAgents,
+    sortedAgents: initialAgents
   });
 
-  // Optimized agent update with minimal re-renders
-  const updateAgent = useCallback((agentId: number, updates: Partial<Agent>) => {
-    performanceMonitor.trackStateUpdate();
-    
-    setAgents(prevAgents => {
-      const agentIndex = prevAgents.findIndex(a => a.id === agentId);
-      if (agentIndex === -1) return prevAgents;
-      
-      const newAgents = [...prevAgents];
-      newAgents[agentIndex] = { ...newAgents[agentIndex], ...updates };
-      return newAgents;
-    });
-    
-    // Update selected agent if it's the one being updated
-    setSelectedAgent(prevSelected => 
-      prevSelected?.id === agentId 
-        ? { ...prevSelected, ...updates }
-        : prevSelected
-    );
-  }, []);
+  const [filterCriteria, setFilterCriteria] = useState({
+    search: '',
+    class: '',
+    minLevel: 0,
+    maxLevel: 100
+  });
 
-  // Batch update for performance
-  const batchUpdateAgents = useCallback((updates: Array<{ id: number; updates: Partial<Agent> }>) => {
+  const [sortCriteria, setSortCriteria] = useState({
+    field: 'level' as keyof Agent,
+    direction: 'desc' as 'asc' | 'desc'
+  });
+
+  // Memoized filtering function
+  const filteredAgents = useMemo(() => {
+    if (!enableFiltering) return state.agents;
+
     const startTime = performance.now();
-    performanceMonitor.trackStateUpdate();
     
-    setAgents(prevAgents => {
-      const newAgents = [...prevAgents];
-      const updateMap = new Map(updates.map(u => [u.id, u.updates]));
+    const filtered = state.agents.filter(agent => {
+      const matchesSearch = !filterCriteria.search || 
+        agent.name.toLowerCase().includes(filterCriteria.search.toLowerCase()) ||
+        agent.class.toLowerCase().includes(filterCriteria.search.toLowerCase());
       
-      for (let i = 0; i < newAgents.length; i++) {
-        const agentUpdates = updateMap.get(newAgents[i].id);
-        if (agentUpdates) {
-          newAgents[i] = { ...newAgents[i], ...agentUpdates };
-        }
+      const matchesClass = !filterCriteria.class || 
+        agent.class === filterCriteria.class;
+      
+      const matchesLevel = agent.level >= filterCriteria.minLevel && 
+        agent.level <= filterCriteria.maxLevel;
+
+      return matchesSearch && matchesClass && matchesLevel;
+    });
+
+    const endTime = performance.now();
+    const filterTime = endTime - startTime;
+
+    // Track filtering performance
+    if (filterTime > 10) {
+      performanceMonitor.logWarning('Agent filtering', filterTime, 10, 'medium');
+    }
+
+    return filtered;
+  }, [state.agents, filterCriteria, enableFiltering]);
+
+  // Memoized sorting function
+  const sortedAgents = useMemo(() => {
+    if (!enableSorting) return filteredAgents;
+
+    const startTime = performance.now();
+    
+    const sorted = [...filteredAgents].sort((a, b) => {
+      const aValue = a[sortCriteria.field];
+      const bValue = b[sortCriteria.field];
+      
+      let comparison = 0;
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        comparison = aValue.localeCompare(bValue);
+      } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+        comparison = aValue - bValue;
       }
       
-      return newAgents;
+      return sortCriteria.direction === 'asc' ? comparison : -comparison;
     });
-    
-    // Update selected agent if it's being updated
-    const selectedAgentUpdate = updates.find(u => u.id === selectedAgent?.id);
-    if (selectedAgentUpdate && selectedAgent) {
-      setSelectedAgent({ ...selectedAgent, ...selectedAgentUpdate.updates });
-    }
-    
-    const batchTime = performance.now() - startTime;
-    console.log(`Batch update completed in ${batchTime.toFixed(2)}ms for ${updates.length} agents`);
-  }, [selectedAgent]);
 
-  // Optimized agent selection
-  const selectAgent = useCallback((agent: Agent | null) => {
-    setSelectedAgent(agent);
+    const sortTime = performance.now() - startTime;
+
+    // Track sorting performance
+    if (sortTime > 5) {
+      performanceMonitor.logWarning('Agent sorting', sortTime, 5, 'medium');
+    }
+
+    return sorted;
+  }, [filteredAgents, sortCriteria, enableSorting]);
+
+  // Batched agents for virtual scrolling
+  const batchedAgents = useMemo(() => {
+    const batches: Agent[][] = [];
+    for (let i = 0; i < sortedAgents.length; i += batchSize) {
+      batches.push(sortedAgents.slice(i, i + batchSize));
+    }
+    return batches;
+  }, [sortedAgents, batchSize]);
+
+  // Update agents with performance tracking
+  const updateAgents = useCallback((newAgents: Agent[]) => {
+    const startTime = performance.now();
+    
+    setState(prev => ({
+      ...prev,
+      agents: newAgents,
+      loading: false,
+      error: null
+    }));
+
+    const updateTime = performance.now() - startTime;
+    
+    // Track update performance
+    performanceMonitor.recordMetric('agent-update', updateTime);
+    
+    if (updateTime > 50) {
+      performanceMonitor.logWarning('Agent update', updateTime, 50, 'medium');
+    }
   }, []);
 
-  // Debounced search query update
-  const debouncedSetSearchQuery = useCallback((query: string) => {
-    setSearchQuery(query);
+  // Optimized agent addition
+  const addAgent = useCallback((agent: Agent) => {
+    setState(prev => ({
+      ...prev,
+      agents: [...prev.agents, agent]
+    }));
   }, []);
 
-  // Optimized sort update
-  const optimizedSetSortBy = useCallback((newSortBy: string) => {
-    if (newSortBy !== sortBy) {
-      setSortBy(newSortBy);
-    }
-  }, [sortBy]);
+  // Optimized agent removal
+  const removeAgent = useCallback((agentId: string) => {
+    setState(prev => ({
+      ...prev,
+      agents: prev.agents.filter(a => a.id !== agentId)
+    }));
+  }, []);
+
+  // Optimized agent update
+  const updateAgent = useCallback((agentId: string, updates: Partial<Agent>) => {
+    setState(prev => ({
+      ...prev,
+      agents: prev.agents.map(agent => 
+        agent.id === agentId ? { ...agent, ...updates } : agent
+      )
+    }));
+  }, []);
+
+  // Filter update functions
+  const updateFilter = useCallback((updates: Partial<typeof filterCriteria>) => {
+    setFilterCriteria(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  // Sort update functions
+  const updateSort = useCallback((field: keyof Agent, direction?: 'asc' | 'desc') => {
+    setSortCriteria(prev => ({
+      field,
+      direction: direction || (prev.field === field && prev.direction === 'asc' ? 'desc' : 'asc')
+    }));
+  }, []);
+
+  // Search optimization with debouncing
+  const debouncedSearch = useCallback((searchTerm: string) => {
+    const timeoutId = setTimeout(() => {
+      updateFilter({ search: searchTerm });
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [updateFilter]);
 
   // Performance metrics
-  const renderMetrics = useMemo(() => ({
-    lastRenderTime: lastRenderTimeRef.current,
-    rerenderCount: renderCountRef.current,
-    filteredCount: filteredAgents.length
-  }), [filteredAgents.length]);
+  const performanceStats = useMemo(() => ({
+    totalAgents: state.agents.length,
+    filteredCount: filteredAgents.length,
+    sortedCount: sortedAgents.length,
+    batchCount: batchedAgents.length,
+    filterRatio: state.agents.length > 0 ? filteredAgents.length / state.agents.length : 1,
+    memoryUsage: state.agents.length * 1024 // Rough estimate in bytes
+  }), [state.agents.length, filteredAgents.length, sortedAgents.length, batchedAgents.length]);
 
-  // Performance logging in development
+  // Effect for performance monitoring
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('useOptimizedAgents render metrics:', renderMetrics);
-    }
-  }, [renderMetrics]);
+    performanceMonitor.recordMetric('agents-processed', state.agents.length);
+    performanceMonitor.recordMetric('filter-efficiency', performanceStats.filterRatio);
+  }, [state.agents.length, performanceStats.filterRatio]);
 
   return {
-    agents,
+    // State
+    agents: state.agents,
+    loading: state.loading,
+    error: state.error,
+    
+    // Processed data
     filteredAgents,
-    selectedAgent,
-    searchQuery,
-    sortBy,
+    sortedAgents,
+    batchedAgents,
+    
+    // Actions
+    updateAgents,
+    addAgent,
+    removeAgent,
     updateAgent,
-    selectAgent,
-    setSearchQuery: debouncedSetSearchQuery,
-    setSortBy: optimizedSetSortBy,
-    batchUpdateAgents,
-    renderMetrics
+    
+    // Filtering
+    filterCriteria,
+    updateFilter,
+    debouncedSearch,
+    
+    // Sorting
+    sortCriteria,
+    updateSort,
+    
+    // Performance
+    performanceStats,
+    
+    // Utils
+    clearFilters: useCallback(() => {
+      setFilterCriteria({
+        search: '',
+        class: '',
+        minLevel: 0,
+        maxLevel: 100
+      });
+    }, []),
+    
+    resetSort: useCallback(() => {
+      setSortCriteria({
+        field: 'level',
+        direction: 'desc'
+      });
+    }, [])
   };
-}
-
-// Hook for optimized quest filtering
-export function useOptimizedQuestFilter(quests: any[], filters: any) {
-  const filterStartTime = useRef(0);
-  
-  return useMemo(() => {
-    filterStartTime.current = performance.now();
-    
-    let filtered = quests;
-    
-    // Apply filters efficiently
-    if (filters.type?.length) {
-      filtered = filtered.filter(q => filters.type.includes(q.type));
-    }
-    if (filters.difficulty?.length) {
-      filtered = filtered.filter(q => filters.difficulty.includes(q.difficulty));
-    }
-    if (filters.status?.length) {
-      filtered = filtered.filter(q => filters.status.includes(q.status));
-    }
-    if (filters.hideCompleted) {
-      filtered = filtered.filter(q => q.status !== 'completed');
-    }
-    if (filters.minRewardXp) {
-      filtered = filtered.filter(q => q.rewards.xp >= filters.minRewardXp);
-    }
-    
-    // Measure and report filter performance
-    setTimeout(() => {
-      performanceMonitor.measureQuestFilter(filterStartTime.current);
-    }, 0);
-    
-    return filtered;
-  }, [quests, filters]);
 }
 
 export default useOptimizedAgents;

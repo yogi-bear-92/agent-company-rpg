@@ -1,0 +1,246 @@
+name: 🎯 Milestone Management
+
+on:
+  schedule:
+    - cron: '0 10 * * 1'  # Every Monday at 10 AM UTC
+  milestone:
+    types: [created, edited, closed, opened]
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  create-milestones:
+    name: Create Standard Milestones
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Create project milestones
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const milestones = [
+              {
+                title: 'RPG Core Features',
+                description: 'Essential RPG mechanics including leveling, skills, and progression systems',
+                due_on: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() // 60 days from now
+              },
+              {
+                title: 'Agent Intelligence',
+                description: 'AI agent behavior, learning capabilities, and autonomous decision making',
+                due_on: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() // 90 days from now
+              },
+              {
+                title: 'Knowledge & Learning System',
+                description: 'Knowledge base, learning mechanisms, and information sharing between agents',
+                due_on: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString() // 45 days from now
+              },
+              {
+                title: 'Token Economy',
+                description: 'Token rewards, economic systems, and incentive structures',
+                due_on: new Date(Date.now() + 75 * 24 * 60 * 60 * 1000).toISOString() // 75 days from now
+              },
+              {
+                title: 'Security & Privacy',
+                description: 'Security measures, privacy protection, and safe agent communication',
+                due_on: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
+              },
+              {
+                title: 'Critical Fixes',
+                description: 'High-priority bugs and blocking issues that need immediate attention',
+                due_on: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString() // 14 days from now
+              },
+              {
+                title: 'Performance & Optimization',
+                description: 'Performance improvements, optimization, and scalability enhancements',
+                due_on: new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString() // 120 days from now
+              },
+              {
+                title: 'Documentation & DevEx',
+                description: 'Documentation improvements and developer experience enhancements',
+                due_on: new Date(Date.now() + 50 * 24 * 60 * 60 * 1000).toISOString() // 50 days from now
+              }
+            ];
+            
+            for (const milestone of milestones) {
+              try {
+                // Check if milestone already exists
+                const existingMilestones = await github.rest.issues.listMilestones({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'all'
+                });
+                
+                const exists = existingMilestones.data.some(m => m.title === milestone.title);
+                
+                if (!exists) {
+                  await github.rest.issues.createMilestone({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    ...milestone
+                  });
+                  console.log(`Created milestone: ${milestone.title}`);
+                } else {
+                  console.log(`Milestone already exists: ${milestone.title}`);
+                }
+              } catch (error) {
+                console.error(`Failed to create milestone ${milestone.title}:`, error.message);
+              }
+            }
+
+  milestone-progress-report:
+    name: Generate Milestone Progress Report
+    runs-on: ubuntu-latest
+    if: github.event.schedule
+    steps:
+      - name: Generate milestone report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const milestones = await github.rest.issues.listMilestones({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              sort: 'due_on'
+            });
+            
+            let report = '# 📊 Weekly Milestone Progress Report\n\n';
+            report += `*Generated on: ${new Date().toISOString().split('T')[0]}*\n\n`;
+            
+            for (const milestone of milestones.data) {
+              const total = milestone.open_issues + milestone.closed_issues;
+              const completed = milestone.closed_issues;
+              const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+              
+              report += `## ${milestone.title}\n`;
+              report += `**Due Date:** ${milestone.due_on ? new Date(milestone.due_on).toDateString() : 'Not set'}\n`;
+              report += `**Progress:** ${progress}% (${completed}/${total} issues)\n`;
+              report += `**Open Issues:** ${milestone.open_issues}\n`;
+              
+              if (milestone.description) {
+                report += `**Description:** ${milestone.description}\n`;
+              }
+              
+              // Check if milestone is at risk
+              if (milestone.due_on) {
+                const dueDate = new Date(milestone.due_on);
+                const now = new Date();
+                const daysLeft = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
+                
+                if (daysLeft < 0) {
+                  report += `🚨 **Status:** OVERDUE by ${Math.abs(daysLeft)} days\n`;
+                } else if (daysLeft < 7 && progress < 80) {
+                  report += `⚠️ **Status:** AT RISK - Due in ${daysLeft} days with ${progress}% completion\n`;
+                } else if (daysLeft < 14 && progress < 50) {
+                  report += `⚠️ **Status:** ATTENTION NEEDED - Due in ${daysLeft} days with ${progress}% completion\n`;
+                } else {
+                  report += `✅ **Status:** ON TRACK - Due in ${daysLeft} days\n`;
+                }
+              }
+              
+              report += '\n';
+            }
+            
+            // Add summary
+            const totalMilestones = milestones.data.length;
+            const overdueMilestones = milestones.data.filter(m => {
+              if (!m.due_on) return false;
+              return new Date(m.due_on) < new Date();
+            }).length;
+            
+            const atRiskMilestones = milestones.data.filter(m => {
+              if (!m.due_on) return false;
+              const dueDate = new Date(m.due_on);
+              const now = new Date();
+              const daysLeft = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
+              const total = m.open_issues + m.closed_issues;
+              const progress = total > 0 ? Math.round((m.closed_issues / total) * 100) : 0;
+              
+              return daysLeft > 0 && daysLeft < 14 && progress < 50;
+            }).length;
+            
+            report += '## 📈 Summary\n\n';
+            report += `- **Total Milestones:** ${totalMilestones}\n`;
+            report += `- **Overdue:** ${overdueMilestones}\n`;
+            report += `- **At Risk:** ${atRiskMilestones}\n`;
+            report += `- **On Track:** ${totalMilestones - overdueMilestones - atRiskMilestones}\n\n`;
+            
+            if (overdueMilestones > 0 || atRiskMilestones > 0) {
+              report += '## 🎯 Recommendations\n\n';
+              if (overdueMilestones > 0) {
+                report += '- Review overdue milestones and consider extending deadlines or reducing scope\n';
+              }
+              if (atRiskMilestones > 0) {
+                report += '- Focus additional resources on at-risk milestones\n';
+                report += '- Consider breaking down large issues into smaller, manageable tasks\n';
+              }
+            }
+            
+            console.log('Milestone Progress Report:');
+            console.log(report);
+            
+            // Create an issue with the report if there are concerning milestones
+            if (overdueMilestones > 0 || atRiskMilestones > 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `📊 Weekly Milestone Review - ${new Date().toISOString().split('T')[0]}`,
+                body: report,
+                labels: ['type:project-management', 'priority:high', 'milestone-review']
+              });
+            }
+
+  auto-close-completed-milestones:
+    name: Auto-close Completed Milestones
+    runs-on: ubuntu-latest
+    if: github.event.schedule
+    steps:
+      - name: Close completed milestones
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const milestones = await github.rest.issues.listMilestones({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+            
+            for (const milestone of milestones.data) {
+              // Close milestone if all issues are closed
+              if (milestone.open_issues === 0 && milestone.closed_issues > 0) {
+                await github.rest.issues.updateMilestone({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  milestone_number: milestone.number,
+                  state: 'closed'
+                });
+                
+                console.log(`Auto-closed completed milestone: ${milestone.title}`);
+                
+                // Create celebration comment
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: `🎉 Milestone Completed: ${milestone.title}`,
+                  body: `
+## 🎉 Milestone Achievement!
+
+The **${milestone.title}** milestone has been successfully completed!
+
+### 📊 Final Stats:
+- **Total Issues Completed:** ${milestone.closed_issues}
+- **Completion Date:** ${new Date().toDateString()}
+
+### 🙏 Thank You
+Great work to everyone who contributed to achieving this milestone!
+
+---
+*This milestone completion was detected and celebrated automatically.*
+                  `,
+                  labels: ['milestone-completed', 'celebration']
+                });
+              }
+            }

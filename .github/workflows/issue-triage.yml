@@ -1,0 +1,199 @@
+name: 🎯 Issue Triage Automation
+
+on:
+  issues:
+    types: [opened]
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  intelligent-triage:
+    name: Intelligent Issue Triage
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    steps:
+      - name: Analyze and triage new issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title.toLowerCase();
+            const body = issue.body?.toLowerCase() || '';
+            const author = issue.user.login;
+            
+            console.log(`Triaging issue #${issue.number}: ${issue.title}`);
+            
+            let priority = 'medium';
+            let complexity = 'moderate';
+            let estimatedHours = 4;
+            let suggestedLabels = [];
+            let assignmentSuggestion = null;
+            let triageNotes = [];
+            
+            // Analyze title and body for keywords
+            const criticalKeywords = ['critical', 'urgent', 'blocking', 'production', 'security', 'data loss'];
+            const highKeywords = ['important', 'major', 'significant', 'performance', 'crash'];
+            const lowKeywords = ['minor', 'cosmetic', 'nice to have', 'enhancement'];
+            
+            // Priority analysis
+            if (criticalKeywords.some(keyword => title.includes(keyword) || body.includes(keyword))) {
+              priority = 'critical';
+              estimatedHours = 8;
+              triageNotes.push('Contains critical keywords - requires immediate attention');
+            } else if (highKeywords.some(keyword => title.includes(keyword) || body.includes(keyword))) {
+              priority = 'high';
+              estimatedHours = 6;
+              triageNotes.push('Contains high priority keywords');
+            } else if (lowKeywords.some(keyword => title.includes(keyword) || body.includes(keyword))) {
+              priority = 'low';
+              estimatedHours = 2;
+              triageNotes.push('Identified as low priority improvement');
+            }
+            
+            // Component analysis
+            const componentKeywords = {
+              'component:frontend': ['ui', 'interface', 'react', 'component', 'styling', 'css', 'design'],
+              'component:backend': ['api', 'server', 'database', 'backend', 'endpoint', 'service'],
+              'feature:agent-system': ['agent', 'ai', 'intelligence', 'behavior', 'learning', 'training'],
+              'feature:rpg-mechanics': ['rpg', 'game', 'level', 'experience', 'progression', 'stats'],
+              'feature:knowledge-system': ['knowledge', 'learning', 'memory', 'information', 'data'],
+              'feature:token-economy': ['token', 'reward', 'economy', 'points', 'currency', 'incentive']
+            };
+            
+            for (const [label, keywords] of Object.entries(componentKeywords)) {
+              if (keywords.some(keyword => title.includes(keyword) || body.includes(keyword))) {
+                suggestedLabels.push(label);
+                triageNotes.push(`Identified as ${label.replace(':', ' ')} related`);
+              }
+            }
+            
+            // Complexity analysis
+            if (body.length > 1000 || title.includes('refactor') || title.includes('redesign')) {
+              complexity = 'complex';
+              estimatedHours = 12;
+            } else if (body.length < 200 && (title.includes('fix') || title.includes('minor'))) {
+              complexity = 'simple';
+              estimatedHours = 1;
+            }
+            
+            // Experience level of author (simplified)
+            const authorInfo = await github.rest.users.getByUsername({
+              username: author
+            });
+            
+            if (authorInfo.data.public_repos > 50) {
+              triageNotes.push('Author has significant GitHub experience');
+            }
+            
+            // Add priority label
+            suggestedLabels.push(`priority:${priority}`);
+            
+            // Create triage comment
+            const triageComment = `
+            ## 🤖 Automated Triage Results
+            
+            **Priority:** ${priority.toUpperCase()}
+            **Estimated Complexity:** ${complexity}
+            **Estimated Hours:** ${estimatedHours}h
+            
+            ### Analysis Notes:
+            ${triageNotes.map(note => `- ${note}`).join('\n')}
+            
+            ### Suggested Labels:
+            ${suggestedLabels.map(label => `\`${label}\``).join(', ')}
+            
+            ### Next Steps:
+            - [ ] Review and confirm priority assessment
+            - [ ] Assign appropriate team member
+            - [ ] Add to relevant project milestone
+            - [ ] Confirm technical approach
+            
+            ---
+            *This analysis was performed automatically. Please review and adjust as needed.*
+            `;
+            
+            // Add the comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: triageComment
+            });
+            
+            // Add suggested labels
+            if (suggestedLabels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: suggestedLabels
+              });
+            }
+            
+            console.log(`Triage complete for issue #${issue.number}`);
+            console.log(`Priority: ${priority}, Complexity: ${complexity}, Hours: ${estimatedHours}`);
+
+  review-untriaged:
+    name: Review Untriaged Issues
+    runs-on: ubuntu-latest
+    if: github.event.schedule
+    steps:
+      - name: Find and flag untriaged issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Get all open issues
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100
+            });
+            
+            const now = new Date();
+            const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            
+            let untriagedCount = 0;
+            
+            for (const issue of issues.data) {
+              // Skip pull requests
+              if (issue.pull_request) continue;
+              
+              const createdDate = new Date(issue.created_at);
+              const labels = issue.labels.map(l => l.name);
+              
+              // Check if issue is older than 1 day and has needs-triage label
+              if (createdDate < oneDayAgo && labels.includes('needs-triage')) {
+                untriagedCount++;
+                
+                // Add urgent-triage label for issues older than 3 days
+                const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+                if (createdDate < threeDaysAgo && !labels.includes('urgent-triage')) {
+                  await github.rest.issues.addLabels({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    labels: ['urgent-triage']
+                  });
+                  
+                  // Add comment
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    body: `⚠️ **Urgent Triage Needed**\n\nThis issue has been waiting for triage for over 3 days. Please review and assign appropriate labels, priority, and assignee.`
+                  });
+                }
+              }
+            }
+            
+            console.log(`Found ${untriagedCount} issues needing triage`);
+            
+            if (untriagedCount > 10) {
+              // Could create an issue or send notification about triage backlog
+              console.log('⚠️ High number of untriaged issues - consider additional triage resources');
+            }

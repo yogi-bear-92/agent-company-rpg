@@ -1,0 +1,84 @@
+{
+  "timestamp": "2025-09-02T22:00:01.995Z",
+  "bundleSize": {
+    "total": {
+      "bytes": 1342977,
+      "mb": "1.28"
+    },
+    "javascript": {
+      "bytes": 246935,
+      "mb": "0.24",
+      "kb": "241.15"
+    },
+    "css": {
+      "bytes": 48248,
+      "mb": "0.05",
+      "kb": "47.12"
+    },
+    "assets": [
+      {
+        "name": "index-CZQJx1jh.js.map",
+        "size": 1047794,
+        "type": "other"
+      },
+      {
+        "name": "index-CZQJx1jh.js",
+        "size": 246935,
+        "type": "js"
+      },
+      {
+        "name": "index-BgMRz_vB.css",
+        "size": 48248,
+        "type": "css"
+      }
+    ]
+  },
+  "assetOptimization": {
+    "hasSourceMaps": false,
+    "isMinified": false,
+    "hasGzipOptimization": false,
+    "hasPreloading": false,
+    "hasPrefetching": false,
+    "indexSize": 632
+  },
+  "chunkingStrategy": {
+    "jsChunks": 1,
+    "cssChunks": 1,
+    "hasVendorChunk": false,
+    "hasComponentChunks": false,
+    "chunkSizes": [
+      {
+        "file": "index-CZQJx1jh.js",
+        "size": 246935,
+        "kb": "241.15",
+        "mb": "0.24"
+      }
+    ]
+  },
+  "recommendations": [
+    {
+      "priority": "high",
+      "category": "bundle-size",
+      "description": "JavaScript bundle is 241.15KB - implement code splitting",
+      "action": "Split large components and implement lazy loading"
+    },
+    {
+      "priority": "medium",
+      "category": "chunking",
+      "description": "Implement better code splitting",
+      "action": "Separate vendor, components, and utils into different chunks"
+    },
+    {
+      "priority": "high",
+      "category": "chunking",
+      "description": "Create separate vendor chunk",
+      "action": "Split React and other vendor libraries into separate chunk"
+    },
+    {
+      "priority": "medium",
+      "category": "loading",
+      "description": "Implement resource preloading",
+      "action": "Add preload links for critical resources"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+# Global code owners
+* @yogi-bear-92
+
+# GitHub workflows and CI/CD configuration
+.github/ @yogi-bear-92
+.github/workflows/ @yogi-bear-92
+
+# Package management and dependencies
+package.json @yogi-bear-92
+package-lock.json @yogi-bear-92
+npm-shrinkwrap.json @yogi-bear-92
+
+# Configuration files
+*.config.js @yogi-bear-92
+*.config.ts @yogi-bear-92
+tsconfig*.json @yogi-bear-92
+vite.config.* @yogi-bear-92
+tailwind.config.* @yogi-bear-92
+eslint.config.* @yogi-bear-92
+
+# Security and compliance
+.gitleaks.toml @yogi-bear-92
+.github/dependabot.yml @yogi-bear-92
+DOCKER* @yogi-bear-92
+
+# Documentation
+*.md @yogi-bear-92
+docs/ @yogi-bear-92
+
+# Source code
+src/ @yogi-bear-92
+
+# Tests
+test/ @yogi-bear-92
+tests/ @yogi-bear-92
+__tests__/ @yogi-bear-92
+*.test.* @yogi-bear-92
+*.spec.* @yogi-bear-92
+
+# Build and deployment
+dist/ @yogi-bear-92
+build/ @yogi-bear-92
+scripts/ @yogi-bear-92
+
+# Claude Flow and coordination
+.claude-flow/ @yogi-bear-92
+.swarm/ @yogi-bear-92
+.hive-mind/ @yogi-bear-92
+coordination/ @yogi-bear-92
