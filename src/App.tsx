@@ -7,6 +7,7 @@ import { LevelUpNotification, NotificationContainer } from './components/LevelUp
 import { useQuestProgression } from './hooks/useLevelProgression';
 import { LevelUpEvent } from './utils/levelProgression';
 import { Quest } from './types/quest';
+import ErrorBoundary, { ComponentErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>({
@@ -247,7 +248,7 @@ export default function App() {
   );
 
   const renderTabs = () => (
-    <div className="flex space-x-1 mb-6">
+    <nav className="flex space-x-1 mb-6" role="navigation" aria-label="Main navigation">
       {[
         { id: 'guild', label: '🏰 Guild Hall', icon: '🏰' },
         { id: 'knowledge', label: '📚 Knowledge Network', icon: '📚' },
@@ -262,11 +263,13 @@ export default function App() {
               ? 'bg-purple-600 text-white'
               : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
           }`}
+          aria-current={appState.activeTab === tab.id ? 'page' : undefined}
+          aria-label={tab.label}
         >
           {tab.label}
         </button>
       ))}
-    </div>
+    </nav>
   );
 
   const renderPlaceholder = (title: string, description: string) => (
@@ -321,18 +324,28 @@ export default function App() {
   }, [progression]);
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent mb-2">
-            Agent Company RPG
-          </h1>
-          <p className="text-slate-400">Revolutionary AI Agent Management Platform</p>
-        </div>
+    <ErrorBoundary>
+      <div className="min-h-screen p-6">
+        {/* Skip link for accessibility */}
+        <a 
+          href="#main-content" 
+          className="skip-link"
+          onFocus={(e) => e.target.scrollIntoView()}
+        >
+          Skip to main content
+        </a>
+        
+        <div className="max-w-7xl mx-auto">
+          <header className="text-center mb-8">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent mb-2">
+              Agent Company RPG
+            </h1>
+            <p className="text-slate-400">Revolutionary AI Agent Management Platform</p>
+          </header>
         
         {renderTabs()}
         
-        <div className="space-y-6">
+        <main className="space-y-6" role="main">
           {appState.activeTab === 'guild' && renderGuildHall()}
           {appState.activeTab === 'knowledge' && renderPlaceholder(
             '📚 Knowledge Network', 
@@ -343,21 +356,35 @@ export default function App() {
             'Deep insights into agent performance, learning patterns, and optimization opportunities'
           )}
           {appState.activeTab === 'quests' && (
-            <QuestBoard
-              agents={agents}
-              onQuestAssign={handleQuestAssign}
-              onQuestStart={handleQuestStart}
-              onQuestComplete={handleQuestComplete}
-            />
+            <ComponentErrorBoundary componentName="Quest Board">
+              <QuestBoard
+                agents={agents}
+                onQuestAssign={handleQuestAssign}
+                onQuestStart={handleQuestStart}
+                onQuestComplete={handleQuestComplete}
+              />
+            </ComponentErrorBoundary>
           )}
-        </div>
+        </main>
         
         {/* Agent Detail Sheet Modal */}
         {appState.selectedAgent && (
-          <AgentSheet 
-            agent={appState.selectedAgent} 
-            onClose={() => setAppState(prev => ({ ...prev, selectedAgent: null }))}
-          />
+          <ComponentErrorBoundary componentName="Agent Sheet">
+            <AgentSheet 
+              agent={appState.selectedAgent} 
+              onClose={() => setAppState(prev => ({ ...prev, selectedAgent: null }))}
+              onAgentUpdate={(updatedAgent) => {
+                setAgents(prev => prev.map(agent => 
+                  agent.id === updatedAgent.id ? updatedAgent : agent
+                ));
+                setAppState(prev => ({ ...prev, selectedAgent: updatedAgent }));
+              }}
+              onMissionAssign={(agent) => {
+                console.log('Assigning mission to agent:', agent.name);
+                // You can implement mission assignment logic here
+              }}
+            />
+          </ComponentErrorBoundary>
         )}
         
         {/* Level progression integration */}
@@ -377,7 +404,8 @@ export default function App() {
             }}
           />
         )}
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }

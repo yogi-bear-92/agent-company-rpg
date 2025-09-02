@@ -2,12 +2,12 @@ import { Agent } from '../types/agent';
 
 interface AgentSheetProps {
   agent: Agent;
-  onClose?: () => void;
+  onClose: () => void;
   onAgentUpdate?: (agent: Agent) => void;
   onMissionAssign?: (agent: Agent) => void;
 }
 
-export default function AgentSheet({ agent, onClose, onMissionAssign }: AgentSheetProps) {
+export default function AgentSheet({ agent, onClose, onAgentUpdate, onMissionAssign }: AgentSheetProps) {
   const renderStatBar = (value: number, max: number = 100, color: string) => {
     const safeBoundedValue = Math.max(0, Math.min(max, isNaN(value) ? 0 : value));
     return (
@@ -20,137 +20,165 @@ export default function AgentSheet({ agent, onClose, onMissionAssign }: AgentShe
     );
   };
 
-  const renderSkillTree = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold flex items-center">
-        🌟 Skill Tree
-      </h3>
-      <div className="grid gap-3">
-        {Object.entries(agent.skillTree).map(([skillName, skill]) => (
-          <div key={skillName} className="bg-slate-800/50 p-3 rounded-lg">
-            <div className="flex justify-between items-center mb-2">
-              <span className="font-medium">{skillName}</span>
-              <span className="text-sm text-slate-400">
-                {skill.level}/{skill.maxLevel}
-              </span>
-            </div>
-            {renderStatBar(skill.level, skill.maxLevel, 'bg-gradient-to-r from-purple-500 to-cyan-500')}
-            {skill.recentProgress && (
-              <div className="text-xs text-green-400 mt-1">
-                {skill.recentProgress}
-              </div>
-            )}
-          </div>
-        ))}
+  const renderSkillTree = () => {
+    const skillTree = agent.skillTree || {};
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold flex items-center">
+          🌟 Skill Tree
+        </h3>
+        <div className="grid gap-3">
+          {Object.entries(skillTree).length > 0 ? (
+            Object.entries(skillTree).map(([skillName, skill]) => {
+              if (!skill || typeof skill !== 'object') return null;
+              return (
+                <div key={skillName} className="bg-slate-800/50 p-3 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-medium">{skillName}</span>
+                    <span className="text-sm text-slate-400">
+                      {skill.level || 0}/{skill.maxLevel || 10}
+                    </span>
+                  </div>
+                  {renderStatBar(skill.level || 0, skill.maxLevel || 10, 'bg-gradient-to-r from-purple-500 to-cyan-500')}
+                  {skill.recentProgress && (
+                    <div className="text-xs text-green-400 mt-1">
+                      {skill.recentProgress}
+                    </div>
+                  )}
+                </div>
+              );
+            }).filter(Boolean)
+          ) : (
+            <div className="text-sm text-slate-400 italic">No skills unlocked yet</div>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
-  const renderKnowledgeBase = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold flex items-center">
-        🧠 Knowledge Base
-        <span className="ml-2 text-sm bg-cyan-500/20 text-cyan-300 px-2 py-1 rounded">
-          {agent.knowledgeBase.totalMemories} memories
-        </span>
-      </h3>
-      
-      <div className="bg-slate-800/50 p-3 rounded-lg">
-        <div className="text-sm text-slate-400 mb-1">Recent Learning:</div>
-        <div className="text-cyan-300">{agent.knowledgeBase.recentLearning}</div>
-      </div>
-      
-      <div className="space-y-2">
-        <div className="text-sm font-medium">Domain Expertise:</div>
-        {Object.entries(agent.knowledgeBase.knowledgeDomains).map(([domain, level]) => (
-          <div key={domain} className="flex items-center justify-between">
-            <span className="text-sm capitalize">{domain.replace('_', ' ')}</span>
-            <div className="flex items-center space-x-2">
-              <div className="w-20">
-                {renderStatBar(level, 100, 'bg-gradient-to-r from-blue-500 to-purple-500')}
-              </div>
-              <span className="text-xs text-slate-400 w-8">{level}%</span>
-            </div>
-          </div>
-        ))}
-      </div>
-      
-      {agent.knowledgeBase.crawlingProgress?.active ? (
-        <div className="bg-green-500/20 border border-green-500/50 p-3 rounded-lg">
-          <div className="text-green-400 text-sm font-medium mb-1">🔄 Currently crawling</div>
-          <div className="text-xs text-green-300">
-            {agent.knowledgeBase.crawlingProgress.currentUrl || agent.knowledgeBase.crawlingProgress.lastUrl}
-          </div>
-          <div className="text-xs text-slate-400 mt-1">
-            {agent.knowledgeBase.crawlingProgress.pagesLearned} pages learned
-          </div>
-        </div>
-      ) : (
-        <div className="bg-slate-700/50 border border-slate-600/50 p-3 rounded-lg">
-          <div className="text-slate-400 text-sm font-medium mb-1">📚 Last crawled</div>
-          <div className="text-xs text-slate-300">
-            {agent.knowledgeBase.crawlingProgress?.lastUrl || 'No recent crawling activity'}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  const renderKnowledgeBase = () => {
+    const knowledgeBase = agent.knowledgeBase || {};
+    const totalMemories = knowledgeBase.totalMemories || 0;
+    const recentLearning = knowledgeBase.recentLearning || 'No recent learning';
+    const domains = knowledgeBase.knowledgeDomains || {};
+    const crawlingProgress = knowledgeBase.crawlingProgress || { active: false, lastUrl: null };
 
-  const renderEquipment = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold flex items-center">
-        ⚔️ Equipment
-      </h3>
-      <div className="space-y-3">
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold flex items-center">
+          🧠 Knowledge Base
+          <span className="ml-2 text-sm bg-cyan-500/20 text-cyan-300 px-2 py-1 rounded">
+            {totalMemories} memories
+          </span>
+        </h3>
+        
         <div className="bg-slate-800/50 p-3 rounded-lg">
-          <div className="text-sm text-purple-400 font-medium mb-1">Primary Tool</div>
-          <div className="text-sm">{agent.equipment.primary}</div>
+          <div className="text-sm text-slate-400 mb-1">Recent Learning:</div>
+          <div className="text-cyan-300">{recentLearning}</div>
         </div>
-        <div className="bg-slate-800/50 p-3 rounded-lg">
-          <div className="text-sm text-cyan-400 font-medium mb-1">Secondary Tool</div>
-          <div className="text-sm">{agent.equipment.secondary}</div>
-        </div>
-        <div className="bg-slate-800/50 p-3 rounded-lg">
-          <div className="text-sm text-green-400 font-medium mb-1">Utility Item</div>
-          <div className="text-sm">{agent.equipment.utility}</div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderRelationships = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold flex items-center">
-        👥 Relationships
-      </h3>
-      {agent.relationships.length === 0 ? (
-        <div className="text-sm text-slate-400 italic">No active relationships</div>
-      ) : (
-        <div className="space-y-3">
-          {agent.relationships.map((rel, idx) => (
-            <div key={idx} className="bg-slate-800/50 p-3 rounded-lg">
-              <div className="flex justify-between items-start mb-2">
-                <span className="text-sm font-medium">Agent #{rel.agentId}</span>
+        
+        <div className="space-y-2">
+          <div className="text-sm font-medium">Domain Expertise:</div>
+          {Object.entries(domains).length > 0 ? (
+            Object.entries(domains).map(([domain, level]) => (
+              <div key={domain} className="flex items-center justify-between">
+                <span className="text-sm capitalize">{domain.replace('_', ' ')}</span>
                 <div className="flex items-center space-x-2">
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    rel.type === 'mentor' ? 'bg-purple-500/20 text-purple-300' :
-                    rel.type === 'apprentice' ? 'bg-green-500/20 text-green-300' :
-                    'bg-blue-500/20 text-blue-300'
-                  }`}>
-                    {rel.type}
-                  </span>
-                  <span className="text-xs text-slate-400">{rel.strength}% strength</span>
+                  <div className="w-20">
+                    {renderStatBar(level as number, 100, 'bg-gradient-to-r from-blue-500 to-purple-500')}
+                  </div>
+                  <span className="text-xs text-slate-400 w-8">{level}</span>
                 </div>
               </div>
-              <div className="text-xs text-slate-400">
-                Recent: {rel.recentInteraction}
-              </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <div className="text-sm text-slate-400 italic">No domain expertise recorded</div>
+          )}
         </div>
-      )}
-    </div>
-  );
+        
+        {crawlingProgress.active ? (
+          <div className="bg-green-500/20 border border-green-500/50 p-3 rounded-lg">
+            <div className="text-green-400 text-sm font-medium mb-1">🔄 Currently crawling</div>
+            <div className="text-xs text-green-300">
+              {crawlingProgress.currentUrl || crawlingProgress.lastUrl}
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+              {crawlingProgress.pagesLearned || 0} pages learned
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-700/50 border border-slate-600/50 p-3 rounded-lg">
+            <div className="text-slate-400 text-sm font-medium mb-1">📚 Last crawled</div>
+            <div className="text-xs text-slate-300">
+              {crawlingProgress.lastUrl || 'No recent crawling activity'}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderEquipment = () => {
+    const equipment = agent.equipment || {};
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold flex items-center">
+          ⚔️ Equipment
+        </h3>
+        <div className="space-y-3">
+          <div className="bg-slate-800/50 p-3 rounded-lg">
+            <div className="text-sm text-purple-400 font-medium mb-1">Primary Tool</div>
+            <div className="text-sm">{equipment.primary || 'None equipped'}</div>
+          </div>
+          <div className="bg-slate-800/50 p-3 rounded-lg">
+            <div className="text-sm text-cyan-400 font-medium mb-1">Secondary Tool</div>
+            <div className="text-sm">{equipment.secondary || 'None equipped'}</div>
+          </div>
+          <div className="bg-slate-800/50 p-3 rounded-lg">
+            <div className="text-sm text-green-400 font-medium mb-1">Utility Item</div>
+            <div className="text-sm">{equipment.utility || 'None equipped'}</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderRelationships = () => {
+    const relationships = agent.relationships || [];
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold flex items-center">
+          👥 Relationships
+        </h3>
+        {relationships.length === 0 ? (
+          <div className="text-sm text-slate-400 italic">No active relationships</div>
+        ) : (
+          <div className="space-y-3">
+            {relationships.map((rel, idx) => (
+              <div key={idx} className="bg-slate-800/50 p-3 rounded-lg">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-sm font-medium">Agent #{rel.agentId}</span>
+                  <div className="flex items-center space-x-2">
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      rel.type === 'mentor' ? 'bg-purple-500/20 text-purple-300' :
+                      rel.type === 'apprentice' ? 'bg-green-500/20 text-green-300' :
+                      'bg-blue-500/20 text-blue-300'
+                    }`}>
+                      {rel.type}
+                    </span>
+                    <span className="text-xs text-slate-400">{rel.strength}</span>
+                  </div>
+                </div>
+                <div className="text-xs text-slate-400">
+                  Recent: {rel.recentInteraction}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -164,7 +192,7 @@ export default function AgentSheet({ agent, onClose, onMissionAssign }: AgentShe
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-4">
-              <span className="text-4xl">{agent.avatar}</span>
+              <span className="text-4xl" role="img" aria-label={`${agent.name} avatar`}>{agent.avatar}</span>
               <div>
                 <h2 className="text-2xl font-bold">{agent.name}</h2>
                 <p className="text-lg text-purple-300">{agent.class}</p>
@@ -173,7 +201,8 @@ export default function AgentSheet({ agent, onClose, onMissionAssign }: AgentShe
             </div>
             <button
               onClick={onClose}
-              className="text-slate-400 hover:text-white text-xl p-2"
+              className="text-slate-400 hover:text-white text-xl p-2 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-800 rounded"
+              aria-label="Close agent details"
             >
               ✕
             </button>
