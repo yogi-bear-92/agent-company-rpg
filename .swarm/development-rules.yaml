@@ -1,0 +1,364 @@
+# Development Swarm Rules and Configuration
+# These rules govern how the swarm works on issues and creates PRs
+
+version: 1.0
+
+# Branch naming conventions
+branching:
+  # Branch prefixes based on issue type
+  prefixes:
+    bug: "fix"
+    feature: "feat"
+    documentation: "docs"
+    refactor: "refactor"
+    test: "test"
+    chore: "chore"
+    performance: "perf"
+    style: "style"
+  
+  # Branch name format: {prefix}/issue-{number}-{sanitized-title}
+  format: "{prefix}/issue-{number}-{title}"
+  
+  # Maximum branch name length
+  max_length: 60
+  
+  # Protected branches (never modify directly)
+  protected:
+    - main
+    - master
+    - develop
+    - production
+
+# Commit message conventions (Conventional Commits)
+commits:
+  # Commit message format
+  format: |
+    {type}: {description}
+    
+    {body}
+    
+    {footer}
+  
+  # Valid commit types
+  types:
+    - feat     # New feature
+    - fix      # Bug fix
+    - docs     # Documentation only
+    - style    # Code style (formatting, semicolons, etc)
+    - refactor # Code change that neither fixes a bug nor adds a feature
+    - perf     # Performance improvement
+    - test     # Adding missing tests
+    - chore    # Changes to build process or auxiliary tools
+  
+  # Commit message rules
+  rules:
+    - description_max_length: 72
+    - body_max_line_length: 100
+    - include_issue_reference: true
+    - sign_off: true
+    - co_author: "Claude <noreply@anthropic.com>"
+
+# Pull request conventions
+pull_requests:
+  # PR title format
+  title_format: "🤖 {type}: {description}"
+  
+  # PR template
+  template: |
+    ## 🤖 Automated Resolution for #{issue_number}
+    
+    ### Summary
+    {summary}
+    
+    ### Changes Made
+    {changes_list}
+    
+    ### Testing
+    - [ ] All existing tests pass
+    - [ ] New tests added for changes
+    - [ ] Manual testing completed
+    - [ ] Performance impact assessed
+    
+    ### Checklist
+    - [ ] Code follows project style guidelines
+    - [ ] Documentation updated
+    - [ ] No breaking changes
+    - [ ] Security considerations addressed
+    
+    Closes #{issue_number}
+  
+  # Labels to add automatically
+  auto_labels:
+    - "automated-pr"
+    - "swarm-generated"
+  
+  # Draft PR conditions
+  create_as_draft:
+    - when_tests_fail: true
+    - when_lint_fails: false
+    - when_complexity_high: true
+
+# Code quality rules
+code_quality:
+  # Pre-commit checks
+  pre_commit:
+    - lint: true
+    - format: true
+    - typecheck: true
+    - test: true
+  
+  # File size limits
+  file_limits:
+    max_file_size: 500  # lines
+    max_function_size: 50  # lines
+    max_complexity: 10  # cyclomatic complexity
+  
+  # Required test coverage
+  test_coverage:
+    minimum: 70  # percentage
+    new_code_minimum: 80  # percentage for new code
+
+# Agent assignment rules
+agent_assignment:
+  # Minimum agents per issue type
+  minimum_agents:
+    bug: 3          # Analyzer, Fixer, Tester
+    feature: 4      # Architect, Developer, Tester, Documenter
+    documentation: 2 # Writer, Reviewer
+    refactor: 3     # Analyzer, Refactorer, Tester
+  
+  # Maximum agents (to prevent resource overuse)
+  maximum_agents: 8
+  
+  # Agent specialization matrix
+  specializations:
+    bug:
+      - root-cause-analyst
+      - coder
+      - tester
+      - reviewer
+    feature:
+      - system-architect
+      - coder
+      - tester
+      - technical-writer
+      - reviewer
+    documentation:
+      - technical-writer
+      - reviewer
+    refactor:
+      - refactoring-expert
+      - coder
+      - tester
+      - reviewer
+    performance:
+      - perf-analyzer
+      - performance-engineer
+      - tester
+
+# Swarm topology rules
+swarm_topology:
+  # Topology selection based on complexity
+  complexity_mapping:
+    low:
+      topology: star
+      max_agents: 2
+      timeout: 300  # 5 minutes
+    medium:
+      topology: hierarchical
+      max_agents: 4
+      timeout: 600  # 10 minutes
+    high:
+      topology: mesh
+      max_agents: 6
+      timeout: 900  # 15 minutes
+    critical:
+      topology: mesh
+      max_agents: 8
+      timeout: 1200  # 20 minutes
+
+# Development workflow
+workflow:
+  # Steps to execute for each issue
+  steps:
+    - analyze_issue
+    - create_branch
+    - spawn_swarm
+    - assign_agents
+    - implement_solution
+    - write_tests
+    - update_documentation
+    - validate_changes
+    - commit_changes
+    - create_pull_request
+    - update_issue
+  
+  # Parallel execution allowed
+  parallel_steps:
+    - [implement_solution, write_tests]
+    - [update_documentation, validate_changes]
+  
+  # Retry policy
+  retry:
+    max_attempts: 3
+    backoff_seconds: 30
+
+# File handling rules
+files:
+  # Files to never modify
+  protected:
+    - .github/workflows/*
+    - package-lock.json
+    - yarn.lock
+    - LICENSE
+    - .gitignore
+  
+  # Files that require special handling
+  sensitive:
+    - "*.env"
+    - "*.key"
+    - "*.pem"
+    - "*config*.json"
+  
+  # Auto-generate if missing
+  auto_generate:
+    - README.md
+    - CHANGELOG.md
+    - .editorconfig
+
+# Testing rules
+testing:
+  # Test file patterns
+  patterns:
+    - "*.test.ts"
+    - "*.test.tsx"
+    - "*.spec.ts"
+    - "*.spec.tsx"
+    - "__tests__/*"
+  
+  # Required tests for different changes
+  requirements:
+    new_component: true
+    new_function: true
+    bug_fix: true
+    refactor: false
+    documentation: false
+  
+  # Test execution order
+  execution_order:
+    - unit
+    - integration
+    - e2e
+
+# Documentation rules
+documentation:
+  # Required documentation
+  required:
+    - README.md      # Always keep updated
+    - API.md         # For API changes
+    - CHANGELOG.md   # For all changes
+  
+  # Documentation style
+  style:
+    - markdown
+    - jsdoc
+    - tsdoc
+  
+  # Auto-generate from code
+  auto_generate:
+    - api_docs: true
+    - type_definitions: true
+    - component_docs: true
+
+# Security rules
+security:
+  # Security checks
+  checks:
+    - dependency_scan: true
+    - code_scan: true
+    - secret_scan: true
+  
+  # Blocked patterns
+  blocked_patterns:
+    - "eval("
+    - "exec("
+    - "innerHTML"
+    - "dangerouslySetInnerHTML"
+  
+  # Required for security issues
+  security_review: true
+
+# Performance rules
+performance:
+  # Performance thresholds
+  thresholds:
+    bundle_size: 500  # KB
+    load_time: 3000   # ms
+    render_time: 100  # ms
+  
+  # Optimization requirements
+  optimizations:
+    - tree_shaking: true
+    - code_splitting: true
+    - lazy_loading: true
+    - memoization: true
+
+# Integration rules
+integrations:
+  # GitHub integration
+  github:
+    auto_assign: false
+    auto_merge: false
+    require_approval: true
+    dismiss_stale_reviews: true
+  
+  # CI/CD integration
+  ci_cd:
+    required_checks:
+      - build
+      - test
+      - lint
+      - typecheck
+    block_on_failure: true
+  
+  # Notification integration
+  notifications:
+    slack: false
+    email: false
+    discord: false
+
+# Monitoring and metrics
+monitoring:
+  # Track metrics
+  metrics:
+    - issue_resolution_time
+    - pr_creation_time
+    - test_coverage
+    - code_quality_score
+    - swarm_efficiency
+  
+  # Reporting
+  reporting:
+    frequency: "weekly"
+    format: "markdown"
+    destination: "docs/swarm-reports/"
+
+# Emergency controls
+emergency:
+  # Stop conditions
+  stop_conditions:
+    - infinite_loop_detected
+    - memory_limit_exceeded
+    - time_limit_exceeded
+    - too_many_failures
+  
+  # Rollback triggers
+  rollback_triggers:
+    - breaking_change_detected
+    - security_vulnerability_found
+    - performance_regression_detected
+  
+  # Manual override
+  manual_override:
+    enabled: true
+    command: "swarm emergency-stop"

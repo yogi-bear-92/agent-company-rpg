@@ -1,6 +1,6 @@
 // Level up notification component with animations for Agent Company RPG
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Agent } from '../types/agent';
 import { LevelUpEvent, ProgressionNotification } from '../utils/levelProgression';
 
@@ -30,6 +30,12 @@ export const LevelUpNotification: React.FC<LevelUpNotificationProps> = ({
   const [animationPhase, setAnimationPhase] = useState<'enter' | 'celebrate' | 'exit'>('enter');
   const notificationRef = useRef<HTMLDivElement>(null);
 
+  const handleClose = useCallback(() => {
+    setAnimationPhase('exit');
+    setIsVisible(false);
+    setTimeout(onClose, 300);
+  }, [onClose]);
+
   useEffect(() => {
     // Entrance animation
     const enterTimer = setTimeout(() => {
@@ -55,13 +61,7 @@ export const LevelUpNotification: React.FC<LevelUpNotificationProps> = ({
       clearTimeout(celebrateTimer);
       if (autoCloseTimer) clearTimeout(autoCloseTimer);
     };
-  }, [autoClose, duration]);
-
-  const handleClose = () => {
-    setAnimationPhase('exit');
-    setIsVisible(false);
-    setTimeout(onClose, 300);
-  };
+  }, [autoClose, duration, handleClose]);
 
   const getAnimationClasses = () => {
     const baseClasses = "transform transition-all duration-500 ease-out";
@@ -239,6 +239,13 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
   const [isVisible, setIsVisible] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
 
+  const handleDismiss = useCallback(() => {
+    setIsExiting(true);
+    setTimeout(() => {
+      onDismiss(notification.id);
+    }, 300);
+  }, [onDismiss, notification.id]);
+
   useEffect(() => {
     setIsVisible(true);
     
@@ -249,14 +256,7 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
       }, notification.duration);
       return () => clearTimeout(timer);
     }
-  }, [notification.duration]);
-
-  const handleDismiss = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      onDismiss(notification.id);
-    }, 300);
-  };
+  }, [notification.duration, handleDismiss]);
 
   const getTypeColors = () => {
     switch (notification.type) {

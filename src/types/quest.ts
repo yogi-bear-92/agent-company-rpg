@@ -150,5 +150,5 @@ export interface QuestEvent {
   eventType: 'started' | 'progress' | 'completed' | 'failed' | 'objective_complete' | 'team_joined' | 'team_left';
   agentId?: number;
   timestamp: Date;
-  details?: any;
+  details?: Record<string, unknown>;
 }
