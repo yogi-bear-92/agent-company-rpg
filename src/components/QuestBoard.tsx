@@ -49,10 +49,11 @@ const QuestBoard: React.FC<QuestBoardProps> = ({ agents, onQuestAssign, onQuestS
     filtered.sort((a, b) => {
       let comparison = 0;
       switch (sortOptions.by) {
-        case 'difficulty':
+        case 'difficulty': {
           const diffOrder = ['Tutorial', 'Easy', 'Medium', 'Hard', 'Expert', 'Legendary'];
           comparison = diffOrder.indexOf(a.difficulty) - diffOrder.indexOf(b.difficulty);
           break;
+        }
         case 'xp':
           comparison = a.rewards.xp - b.rewards.xp;
           break;
@@ -254,7 +255,7 @@ const QuestBoard: React.FC<QuestBoardProps> = ({ agents, onQuestAssign, onQuestS
           <select
             className="px-3 py-1 rounded bg-white/10 text-white text-xs"
             value={sortOptions.by}
-            onChange={(e) => setSortOptions(prev => ({ ...prev, by: e.target.value as any }))}
+            onChange={(e) => setSortOptions(prev => ({ ...prev, by: e.target.value as QuestSortOptions['by'] }))}
           >
             <option value="difficulty">Sort by Difficulty</option>
             <option value="xp">Sort by XP</option>

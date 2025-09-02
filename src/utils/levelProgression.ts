@@ -28,7 +28,7 @@ export interface StatIncrease {
 export interface ProgressionEvent {
   type: 'xp_gained' | 'level_up' | 'skill_unlocked' | 'quest_completed';
   agentId: number;
-  data: any;
+  data: unknown;
   timestamp: Date;
 }
 

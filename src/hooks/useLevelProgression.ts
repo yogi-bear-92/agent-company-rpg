@@ -21,7 +21,11 @@ export interface LevelProgressionHookReturn {
   
   // Actions
   awardXp: (agent: Agent, amount: number, source: string) => Promise<Agent>;
-  completeQuest: (quest: Quest, agents: Agent[], completionData?: any) => Promise<Agent[]>;
+  completeQuest: (quest: Quest, agents: Agent[], completionData?: {
+    completionTime?: number;
+    optionalObjectivesCompleted?: number;
+    teamPerformanceBonus?: number;
+  }) => Promise<Agent[]>;
   dismissNotification: (id: string) => void;
   clearDismissedNotifications: () => void;
   getNextLevelUp: () => LevelUpEvent | undefined;
@@ -58,6 +62,102 @@ export const useLevelProgression = (): LevelProgressionHookReturn => {
   });
 
   const animationTimersRef = useRef<{ [agentId: number]: NodeJS.Timeout[] }>({});
+
+  // Create particle effect for level ups
+  const createParticleEffect = useCallback((agentId: number) => {
+    const agentElement = document.querySelector(`[data-agent-id="${agentId}"]`);
+    if (!agentElement) return;
+
+    const rect = agentElement.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    // Create particles
+    for (let i = 0; i < 15; i++) {
+      const particle = document.createElement('div');
+      particle.className = 'fixed pointer-events-none z-50';
+      particle.style.width = '6px';
+      particle.style.height = '6px';
+      particle.style.backgroundColor = ['#ffd700', '#ffed4e', '#f7c41f'][i % 3];
+      particle.style.borderRadius = '50%';
+      particle.style.left = `${centerX}px`;
+      particle.style.top = `${centerY}px`;
+
+      const angle = (i / 15) * Math.PI * 2;
+      const velocity = 50 + Math.random() * 50;
+      const vx = Math.cos(angle) * velocity;
+      const vy = Math.sin(angle) * velocity;
+
+      particle.style.transform = `translate(-50%, -50%)`;
+      document.body.appendChild(particle);
+
+      // Animate particle
+      let progress = 0;
+      const animate = () => {
+        progress += 0.02;
+        if (progress >= 1) {
+          document.body.removeChild(particle);
+          return;
+        }
+
+        const x = vx * progress;
+        const y = vy * progress + (progress * progress * 200); // Gravity
+        const opacity = 1 - progress;
+
+        particle.style.transform = `translate(${x - 3}px, ${y - 3}px)`;
+        particle.style.opacity = opacity.toString();
+
+        requestAnimationFrame(animate);
+      };
+
+      requestAnimationFrame(animate);
+    }
+  }, []);
+
+  // Play level up visual effects
+  const playLevelUpEffect = useCallback((agentId: number) => {
+    // Clear existing timers for this agent
+    if (animationTimersRef.current[agentId]) {
+      animationTimersRef.current[agentId].forEach(timer => clearTimeout(timer));
+    }
+
+    animationTimersRef.current[agentId] = [];
+
+    // Find agent elements and apply effects
+    const agentElements = document.querySelectorAll(`[data-agent-id="${agentId}"]`);
+    
+    agentElements.forEach((element) => {
+      const htmlElement = element as HTMLElement;
+      
+      // Glow effect
+      htmlElement.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.8)';
+      htmlElement.style.transform = 'scale(1.05)';
+      htmlElement.style.transition = 'all 0.3s ease-out';
+      
+      // Remove glow after animation
+      const glowTimer = setTimeout(() => {
+        htmlElement.style.boxShadow = '';
+        htmlElement.style.transform = '';
+      }, 2000);
+      
+      animationTimersRef.current[agentId].push(glowTimer);
+    });
+
+    // Screen flash effect
+    const flash = document.createElement('div');
+    flash.className = 'fixed inset-0 bg-yellow-400 opacity-20 pointer-events-none z-50';
+    flash.style.animation = 'flash 0.2s ease-out';
+    document.body.appendChild(flash);
+
+    const flashTimer = setTimeout(() => {
+      document.body.removeChild(flash);
+    }, 200);
+    
+    animationTimersRef.current[agentId].push(flashTimer);
+
+    // Particle effect
+    createParticleEffect(agentId);
+  }, [createParticleEffect]);
 
   // Initialize and sync with progression manager
   useEffect(() => {
@@ -99,15 +199,20 @@ export const useLevelProgression = (): LevelProgressionHookReturn => {
 
     // Periodic sync
     const syncInterval = setInterval(syncState, 1000);
+    
+    // Copy ref value to avoid stale closure warning
+    const currentTimers = animationTimersRef.current;
 
     return () => {
       clearInterval(syncInterval);
-      // Clean up animation timers
-      Object.values(animationTimersRef.current).forEach(timers => {
-        timers.forEach(timer => clearTimeout(timer));
-      });
+      // Clean up animation timers using the copied value
+      if (currentTimers) {
+        Object.values(currentTimers).forEach(timers => {
+          timers.forEach(timer => clearTimeout(timer));
+        });
+      }
     };
-  }, []);
+  }, [playLevelUpEffect]);
 
   // Award XP to an agent
   const awardXp = useCallback(async (
@@ -169,102 +274,6 @@ export const useLevelProgression = (): LevelProgressionHookReturn => {
 
   const onSkillUnlock = useCallback((handler: (event: ProgressionEvent) => void) => {
     eventHandlersRef.current.skillUnlock.push(handler);
-  }, []);
-
-  // Play level up visual effects
-  const playLevelUpEffect = useCallback((agentId: number) => {
-    // Clear existing timers for this agent
-    if (animationTimersRef.current[agentId]) {
-      animationTimersRef.current[agentId].forEach(timer => clearTimeout(timer));
-    }
-
-    animationTimersRef.current[agentId] = [];
-
-    // Find agent elements and apply effects
-    const agentElements = document.querySelectorAll(`[data-agent-id="${agentId}"]`);
-    
-    agentElements.forEach((element) => {
-      const htmlElement = element as HTMLElement;
-      
-      // Glow effect
-      htmlElement.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.8)';
-      htmlElement.style.transform = 'scale(1.05)';
-      htmlElement.style.transition = 'all 0.3s ease-out';
-      
-      // Remove glow after animation
-      const glowTimer = setTimeout(() => {
-        htmlElement.style.boxShadow = '';
-        htmlElement.style.transform = '';
-      }, 2000);
-      
-      animationTimersRef.current[agentId].push(glowTimer);
-    });
-
-    // Screen flash effect
-    const flash = document.createElement('div');
-    flash.className = 'fixed inset-0 bg-yellow-400 opacity-20 pointer-events-none z-50';
-    flash.style.animation = 'flash 0.2s ease-out';
-    document.body.appendChild(flash);
-
-    const flashTimer = setTimeout(() => {
-      document.body.removeChild(flash);
-    }, 200);
-    
-    animationTimersRef.current[agentId].push(flashTimer);
-
-    // Particle effect
-    createParticleEffect(agentId);
-  }, []);
-
-  // Create particle effect for level ups
-  const createParticleEffect = useCallback((agentId: number) => {
-    const agentElement = document.querySelector(`[data-agent-id="${agentId}"]`);
-    if (!agentElement) return;
-
-    const rect = agentElement.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-
-    // Create particles
-    for (let i = 0; i < 15; i++) {
-      const particle = document.createElement('div');
-      particle.className = 'fixed pointer-events-none z-50';
-      particle.style.width = '6px';
-      particle.style.height = '6px';
-      particle.style.backgroundColor = ['#ffd700', '#ffed4e', '#f7c41f'][i % 3];
-      particle.style.borderRadius = '50%';
-      particle.style.left = `${centerX}px`;
-      particle.style.top = `${centerY}px`;
-
-      const angle = (i / 15) * Math.PI * 2;
-      const velocity = 50 + Math.random() * 50;
-      const vx = Math.cos(angle) * velocity;
-      const vy = Math.sin(angle) * velocity;
-
-      particle.style.transform = `translate(-50%, -50%)`;
-      document.body.appendChild(particle);
-
-      // Animate particle
-      let progress = 0;
-      const animate = () => {
-        progress += 0.02;
-        if (progress >= 1) {
-          document.body.removeChild(particle);
-          return;
-        }
-
-        const x = vx * progress;
-        const y = vy * progress + (progress * progress * 200); // Gravity
-        const opacity = 1 - progress;
-
-        particle.style.transform = `translate(${x - 3}px, ${y - 3}px)`;
-        particle.style.opacity = opacity.toString();
-
-        requestAnimationFrame(animate);
-      };
-
-      requestAnimationFrame(animate);
-    }
   }, []);
 
   // Calculate preview of XP gain effects
@@ -330,7 +339,11 @@ export const useQuestProgression = () => {
     questId: string,
     quest: Quest,
     agents: Agent[],
-    completionData?: any
+    completionData?: {
+      completionTime?: number;
+      optionalObjectivesCompleted?: number;
+      teamPerformanceBonus?: number;
+    }
   ) => {
     const updatedAgents = await progression.completeQuest(quest, agents, completionData);
     

@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 describe('XP Bar Animation Fix', () => {
-  it('should handle rapid level ups without glitching', async () => {
+  describe('should handle rapid level ups without glitching', () => {
     // Test that multiple level ups in quick succession animate smoothly
     const testCases = [
       { 
@@ -24,7 +23,7 @@ describe('XP Bar Animation Fix', () => {
         name: 'Triple level up',
         startXP: 90,
         gainedXP: 320,
-        expectedLevels: 3,
+        expectedLevels: 4,
         expectedFinalXP: 10
       }
     ];

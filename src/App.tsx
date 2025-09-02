@@ -256,7 +256,7 @@ export default function App() {
       ].map(tab => (
         <button
           key={tab.id}
-          onClick={() => setAppState(prev => ({ ...prev, activeTab: tab.id as any }))}
+          onClick={() => setAppState(prev => ({ ...prev, activeTab: tab.id as AppState['activeTab'] }))}
           className={`px-4 py-2 rounded-lg transition-colors ${
             appState.activeTab === tab.id
               ? 'bg-purple-600 text-white'

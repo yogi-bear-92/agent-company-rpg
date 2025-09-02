@@ -17,6 +17,13 @@ jobs:
     name: Triage and Initialize Swarm
     runs-on: ubuntu-latest
     if: contains(github.event.issue.labels.*.name, 'swarm:task') || github.event_name == 'workflow_dispatch'
+    outputs:
+      issue_number: ${{ steps.parse_issue.outputs.issue_number }}
+      swarm_type: ${{ steps.parse_issue.outputs.swarm_type }}
+      priority: ${{ steps.parse_issue.outputs.priority }}
+      agents: ${{ steps.parse_issue.outputs.agents }}
+      issue_type: ${{ steps.classify_issue.outputs.issue_type }}
+      complexity: ${{ steps.classify_issue.outputs.complexity }}
     
     steps:
       - name: Checkout repository
@@ -25,7 +32,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Install Claude Flow
         run: npm install -g claude-flow@alpha
@@ -76,6 +83,48 @@ jobs:
             core.setOutput('priority', priority);
             core.setOutput('agents', agents.join(','));
             core.setOutput('issue_number', issue.number);
+
+      - name: Classify Issue Type and Complexity
+        id: classify_issue
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issue = context.payload.issue || await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.inputs?.issue_number || context.issue.number
+            }).then(r => r.data);
+            
+            const body = issue.body || '';
+            const title = issue.title || '';
+            const labels = issue.labels.map(label => label.name.toLowerCase());
+            
+            // Determine issue type
+            let issueType = 'task';
+            if (labels.includes('bug') || title.toLowerCase().includes('bug') || title.toLowerCase().includes('fix')) {
+              issueType = 'bug';
+            } else if (labels.includes('enhancement') || labels.includes('feature') || title.toLowerCase().includes('feature') || title.toLowerCase().includes('add')) {
+              issueType = 'feature';
+            } else if (labels.includes('documentation') || labels.includes('docs') || title.toLowerCase().includes('doc')) {
+              issueType = 'docs';
+            }
+            
+            // Estimate complexity based on content length and keywords
+            const contentLength = (body + title).length;
+            const complexityKeywords = ['architecture', 'refactor', 'migrate', 'integration', 'api', 'database', 'security'];
+            const hasComplexKeywords = complexityKeywords.some(keyword => 
+              (body + title).toLowerCase().includes(keyword)
+            );
+            
+            let complexity = 'medium';
+            if (contentLength < 200 && !hasComplexKeywords) {
+              complexity = 'low';
+            } else if (contentLength > 500 || hasComplexKeywords || labels.includes('epic')) {
+              complexity = 'high';
+            }
+            
+            core.setOutput('issue_type', issueType);
+            core.setOutput('complexity', complexity);
 
       - name: Apply Swarm Labels
         uses: actions/github-script@v6

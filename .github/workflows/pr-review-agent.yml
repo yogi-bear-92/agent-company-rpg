@@ -27,7 +27,38 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          echo "📦 Installing dependencies..."
+          npm ci --prefer-offline --no-audit
+          echo "✅ Dependencies installed successfully"
+
+      - name: Build project
+        id: build
+        run: |
+          echo "🏗️ Building project..."
+          if npm run build; then
+            echo "✅ Build successful"
+            echo "build_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Build failed"
+            echo "build_success=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+        continue-on-error: true
+
+      - name: Run tests
+        id: tests
+        run: |
+          echo "🧪 Running tests..."
+          if npm test -- --passWithNoTests; then
+            echo "✅ Tests passed"
+            echo "test_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Tests failed"
+            echo "test_success=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+        continue-on-error: true
 
       - name: Code Quality Analysis
         uses: actions/github-script@v7
@@ -35,6 +66,12 @@ jobs:
           script: |
             const { execSync } = require('child_process');
             const fs = require('fs');
+            const path = require('path');
+            const core = require('@actions/core');
+            
+            // Get build and test results from previous steps
+            const buildSuccess = '${{ steps.build.outputs.build_success }}' === 'true';
+            const testSuccess = '${{ steps.tests.outputs.test_success }}' === 'true';
             
             // Get PR files
             const { data: files } = await github.rest.pulls.listFiles({
@@ -46,56 +83,85 @@ jobs:
             let reviewComments = [];
             let suggestions = [];
             
+            // Add build/test status to suggestions
+            if (!buildSuccess) {
+              suggestions.push("🚨 **Build Status**: Build failed. Please fix build errors before merging.");
+            }
+            
+            if (!testSuccess) {
+              suggestions.push("🚨 **Test Status**: Tests failed. Please ensure all tests pass before merging.");
+            }
+            
             // Analyze each modified file
             for (const file of files) {
               if (file.status === 'removed') continue;
               
-              const fileContent = fs.readFileSync(file.filename, 'utf8');
-              const lines = fileContent.split('\n');
-              
-              // Check for common issues
-              lines.forEach((line, index) => {
-                const lineNum = index + 1;
-                
-                // Security checks
-                if (line.includes('console.log') && file.filename.includes('src/')) {
-                  reviewComments.push({
-                    path: file.filename,
-                    line: lineNum,
-                    body: "🔍 **Security**: Consider removing console.log statements in production code or use a proper logging library."
-                  });
+              try {
+                // Check if file exists and is readable
+                if (!fs.existsSync(file.filename)) {
+                  console.log(`Skipping ${file.filename} - file not found`);
+                  continue;
                 }
                 
-                if (line.includes('TODO') || line.includes('FIXME')) {
-                  reviewComments.push({
-                    path: file.filename,
-                    line: lineNum,
-                    body: "📝 **Code Quality**: TODO/FIXME found. Consider creating an issue to track this work."
-                  });
+                const fileStats = fs.statSync(file.filename);
+                if (!fileStats.isFile()) {
+                  console.log(`Skipping ${file.filename} - not a regular file`);
+                  continue;
                 }
                 
-                // TypeScript/JavaScript best practices
-                if (line.includes('any') && file.filename.endsWith('.ts')) {
-                  reviewComments.push({
-                    path: file.filename,
-                    line: lineNum,
-                    body: "🎯 **Type Safety**: Consider using a more specific type instead of 'any' for better type safety."
-                  });
+                const fileContent = fs.readFileSync(file.filename, 'utf8');
+                const lines = fileContent.split('\n');
+                
+                console.log(`Analyzing ${file.filename} (${lines.length} lines)`);
+                
+                // Check for common issues
+                lines.forEach((line, index) => {
+                  const lineNum = index + 1;
+                  
+                  // Security checks
+                  if (line.includes('console.log') && file.filename.includes('src/')) {
+                    reviewComments.push({
+                      path: file.filename,
+                      line: lineNum,
+                      body: "🔍 **Security**: Consider removing console.log statements in production code or use a proper logging library."
+                    });
+                  }
+                  
+                  if (line.includes('TODO') || line.includes('FIXME')) {
+                    reviewComments.push({
+                      path: file.filename,
+                      line: lineNum,
+                      body: "📝 **Code Quality**: TODO/FIXME found. Consider creating an issue to track this work."
+                    });
+                  }
+                  
+                  // TypeScript/JavaScript best practices
+                  if (line.includes('any') && file.filename.endsWith('.ts')) {
+                    reviewComments.push({
+                      path: file.filename,
+                      line: lineNum,
+                      body: "🎯 **Type Safety**: Consider using a more specific type instead of 'any' for better type safety."
+                    });
+                  }
+                  
+                  // React best practices
+                  if (line.includes('useEffect') && !line.includes('[]') && !line.includes('dependencies')) {
+                    reviewComments.push({
+                      path: file.filename,
+                      line: lineNum,
+                      body: "⚛️ **React**: Ensure useEffect has proper dependency array to avoid infinite re-renders."
+                    });
+                  }
+                });
+                
+                // File size check
+                if (lines.length > 500) {
+                  suggestions.push(`📏 **File Size**: ${file.filename} is ${lines.length} lines. Consider breaking it into smaller modules.`);
                 }
                 
-                // React best practices
-                if (line.includes('useEffect') && !line.includes('[]') && !line.includes('dependencies')) {
-                  reviewComments.push({
-                    path: file.filename,
-                    line: lineNum,
-                    body: "⚛️ **React**: Ensure useEffect has proper dependency array to avoid infinite re-renders."
-                  });
-                }
-              });
-              
-              // File size check
-              if (lines.length > 500) {
-                suggestions.push(`📏 **File Size**: ${file.filename} is ${lines.length} lines. Consider breaking it into smaller modules.`);
+              } catch (error) {
+                console.log(`Error analyzing ${file.filename}: ${error.message}`);
+                suggestions.push(`⚠️ **Analysis Error**: Could not fully analyze ${file.filename} - ${error.message}`);
               }
             }
             
@@ -107,58 +173,122 @@ jobs:
             
             // Submit review if there are comments
             if (reviewComments.length > 0 || suggestions.length > 0) {
-              const body = `## 🤖 Automated Code Review
-            
-            ${suggestions.length > 0 ? '### Suggestions:\n' + suggestions.map(s => `- ${s}`).join('\n') + '\n' : ''}
-            
-            ${reviewComments.length > 0 ? `### Detailed Comments:\n${reviewComments.length} inline comments added.` : ''}
-            
-            This review was automatically generated. Please address the suggestions and feel free to discuss any concerns.`;
+              const statusEmoji = (!buildSuccess || !testSuccess) ? '🚨' : suggestions.length > 0 ? '⚠️' : '✅';
+              const statusText = (!buildSuccess || !testSuccess) ? 'Needs Attention' : suggestions.length > 0 ? 'Review Required' : 'Looks Good';
               
-              await github.rest.pulls.createReview({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: context.payload.pull_request.number,
-                body: body,
-                event: 'COMMENT',
-                comments: reviewComments
-              });
-            }
+              const body = `## 🤖 Automated Code Review ${statusEmoji} ${statusText}
 
-      - name: Check Build and Tests
-        run: |
-          echo "🏗️ Building project..."
-          npm run build || echo "Build failed - will be reported in review"
-          
-          echo "🧪 Running tests..."
-          npm test || echo "Tests failed - will be reported in review"
-        continue-on-error: true
+**Build Status**: ${buildSuccess ? '✅ Passed' : '❌ Failed'}
+**Test Status**: ${testSuccess ? '✅ Passed' : '❌ Failed'}
+
+${suggestions.length > 0 ? '### 📋 Suggestions:\n' + suggestions.map(s => `- ${s}`).join('\n') + '\n' : ''}
+
+${reviewComments.length > 0 ? `### 💬 Detailed Comments:\n${reviewComments.length} inline comments added for your review.\n` : ''}
+
+${(!buildSuccess || !testSuccess) ? '⚠️ **Action Required**: Please fix build/test failures before merging.\n' : ''}
+
+*This review was automatically generated. Please address the suggestions and feel free to discuss any concerns.*`;
+              
+              try {
+                await github.rest.pulls.createReview({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.payload.pull_request.number,
+                  body: body,
+                  event: 'COMMENT',
+                  comments: reviewComments
+                });
+                console.log('✅ Review submitted successfully');
+              } catch (error) {
+                console.log(`❌ Failed to submit review: ${error.message}`);
+                core.setFailed(`Failed to submit review: ${error.message}`);
+              }
+            } else if (!buildSuccess || !testSuccess) {
+              // Submit a review even if no code issues but build/test failed
+              const body = `## 🤖 Automated Code Review 🚨 Build/Test Issues
+
+**Build Status**: ${buildSuccess ? '✅ Passed' : '❌ Failed'}
+**Test Status**: ${testSuccess ? '✅ Passed' : '❌ Failed'}
+
+⚠️ **Action Required**: Please fix build/test failures before merging.
+
+*This review was automatically generated.*`;
+              
+              try {
+                await github.rest.pulls.createReview({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.payload.pull_request.number,
+                  body: body,
+                  event: 'REQUEST_CHANGES'
+                });
+                console.log('✅ Build/test failure review submitted');
+              } catch (error) {
+                console.log(`❌ Failed to submit build/test review: ${error.message}`);
+              }
+            } else {
+              console.log('✅ No issues found - skipping review');
+            }
 
       - name: Generate PR Metrics
         uses: actions/github-script@v7
         with:
           script: |
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number
-            });
+            const core = require('@actions/core');
             
-            const { data: files } = await github.rest.pulls.listFiles({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number
-            });
-            
-            const metrics = {
-              filesChanged: files.length,
-              additions: pr.additions,
-              deletions: pr.deletions,
-              changedLines: pr.additions + pr.deletions,
-              complexity: files.length > 10 ? 'High' : files.length > 5 ? 'Medium' : 'Low'
-            };
-            
-            console.log('📊 PR Metrics:');
-            console.log(`Files changed: ${metrics.filesChanged}`);
-            console.log(`Lines added: ${metrics.additions}, deleted: ${metrics.deletions}`);
-            console.log(`Complexity: ${metrics.complexity}`);
+            try {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number
+              });
+              
+              const { data: files } = await github.rest.pulls.listFiles({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number
+              });
+              
+              // Get build and test results
+              const buildSuccess = '${{ steps.build.outputs.build_success }}' === 'true';
+              const testSuccess = '${{ steps.tests.outputs.test_success }}' === 'true';
+              
+              const metrics = {
+                filesChanged: files.length,
+                additions: pr.additions || 0,
+                deletions: pr.deletions || 0,
+                changedLines: (pr.additions || 0) + (pr.deletions || 0),
+                complexity: files.length > 10 ? 'High' : files.length > 5 ? 'Medium' : 'Low',
+                buildStatus: buildSuccess ? 'Passed' : 'Failed',
+                testStatus: testSuccess ? 'Passed' : 'Failed'
+              };
+              
+              // Calculate risk assessment
+              let riskLevel = 'Low';
+              if (!buildSuccess || !testSuccess) {
+                riskLevel = 'High';
+              } else if (metrics.complexity === 'High' || metrics.changedLines > 500) {
+                riskLevel = 'Medium';
+              }
+              
+              console.log('📊 PR Metrics Summary:');
+              console.log(`Files changed: ${metrics.filesChanged}`);
+              console.log(`Lines added: ${metrics.additions}, deleted: ${metrics.deletions}`);
+              console.log(`Total changes: ${metrics.changedLines} lines`);
+              console.log(`Complexity: ${metrics.complexity}`);
+              console.log(`Build status: ${metrics.buildStatus}`);
+              console.log(`Test status: ${metrics.testStatus}`);
+              console.log(`Risk level: ${riskLevel}`);
+              
+              // Set outputs for potential downstream jobs
+              core.setOutput('files-changed', metrics.filesChanged);
+              core.setOutput('total-changes', metrics.changedLines);
+              core.setOutput('complexity', metrics.complexity);
+              core.setOutput('risk-level', riskLevel);
+              core.setOutput('build-success', buildSuccess);
+              core.setOutput('test-success', testSuccess);
+              
+            } catch (error) {
+              console.log(`❌ Failed to generate PR metrics: ${error.message}`);
+              core.setFailed(`Failed to generate PR metrics: ${error.message}`);
+            }
