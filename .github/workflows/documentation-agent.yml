@@ -1,0 +1,227 @@
+name: Documentation Agent
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'README.md'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package.json'
+  schedule:
+    - cron: '0 0 * * 0' # Weekly on Sunday
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  documentation-maintenance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check README Sync
+        id: readme-check
+        run: |
+          # Check if package.json version matches README
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          README_VERSION=$(grep -o 'version.*[0-9]\+\.[0-9]\+\.[0-9]\+' README.md | head -1 | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "not-found")
+          
+          echo "Package version: $PACKAGE_VERSION"
+          echo "README version: $README_VERSION"
+          
+          if [ "$PACKAGE_VERSION" != "$README_VERSION" ]; then
+            echo "version_mismatch=true" >> $GITHUB_OUTPUT
+            echo "package_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate API Documentation
+        run: |
+          echo "📚 Generating API documentation..."
+          
+          # Create docs directory if it doesn't exist
+          mkdir -p docs/api
+          
+          # Generate component documentation
+          find src -name "*.ts" -o -name "*.tsx" | grep -v test | while read file; do
+            echo "Analyzing $file..."
+            # Extract exported functions and components
+            grep -n "export.*function\|export.*const\|export.*class" "$file" || true
+          done > docs/api/exports.md
+          
+          # Generate a simple API reference
+          cat > docs/api/README.md << 'EOF'
+          # API Documentation
+          
+          This directory contains auto-generated API documentation for the Agent Company RPG project.
+          
+          ## Components
+          
+          - [Exports Reference](./exports.md) - List of all exported functions and components
+          
+          ## Last Updated
+          
+          Generated on $(date)
+          EOF
+
+      - name: Update Changelog
+        run: |
+          echo "📝 Updating changelog..."
+          
+          # Get recent commits since last release
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~10")
+          
+          # Generate changelog entry
+          cat > CHANGELOG_NEW.md << 'EOF'
+          # Changelog
+          
+          ## [Unreleased]
+          
+          ### Recent Changes
+          
+          EOF
+          
+          # Add recent commits
+          git log --pretty=format:"- %s (%h)" $LAST_TAG..HEAD >> CHANGELOG_NEW.md
+          
+          # Append existing changelog if it exists
+          if [ -f CHANGELOG.md ]; then
+            echo "" >> CHANGELOG_NEW.md
+            tail -n +2 CHANGELOG.md >> CHANGELOG_NEW.md
+          fi
+          
+          mv CHANGELOG_NEW.md CHANGELOG.md
+
+      - name: Update README with Current Stats
+        run: |
+          echo "📊 Updating README stats..."
+          
+          # Count components, agents, etc.
+          COMPONENTS=$(find src -name "*.tsx" | wc -l)
+          AGENTS=$(find src -name "*agent*" -o -name "*Agent*" | wc -l)
+          TOTAL_FILES=$(find src -name "*.ts" -o -name "*.tsx" | wc -l)
+          
+          # Update stats in README if section exists
+          if grep -q "## 📊 Project Stats" README.md; then
+            sed -i.bak "/## 📊 Project Stats/,/^##/ {
+              /^##.*Project Stats/!{
+                /^##/!d
+              }
+            }" README.md
+          fi
+          
+          # Add updated stats section
+          cat >> README.md << EOF
+          
+          ## 📊 Project Stats
+          
+          - **Components**: $COMPONENTS
+          - **AI Agents**: $AGENTS  
+          - **Total Source Files**: $TOTAL_FILES
+          - **Last Updated**: $(date +"%Y-%m-%d")
+          
+          EOF
+
+      - name: Check for Documentation Issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            let issues = [];
+            
+            // Check for missing documentation
+            const srcFiles = [];
+            function findFiles(dir) {
+              const files = fs.readdirSync(dir);
+              files.forEach(file => {
+                const filePath = path.join(dir, file);
+                const stat = fs.statSync(filePath);
+                if (stat.isDirectory() && !file.startsWith('.')) {
+                  findFiles(filePath);
+                } else if (file.endsWith('.ts') || file.endsWith('.tsx')) {
+                  srcFiles.push(filePath);
+                }
+              });
+            }
+            
+            try {
+              findFiles('src');
+            } catch (e) {
+              console.log('No src directory found');
+            }
+            
+            // Check each file for documentation
+            srcFiles.forEach(file => {
+              try {
+                const content = fs.readFileSync(file, 'utf8');
+                const lines = content.split('\n');
+                
+                // Check for missing JSDoc on exported functions
+                let inFunction = false;
+                let hasJSDoc = false;
+                
+                lines.forEach((line, index) => {
+                  if (line.trim().startsWith('/**')) {
+                    hasJSDoc = true;
+                  }
+                  
+                  if (line.includes('export function') || line.includes('export const')) {
+                    if (!hasJSDoc && !line.includes('//')) {
+                      issues.push(`${file}:${index + 1} - Missing documentation for exported function`);
+                    }
+                    hasJSDoc = false;
+                  }
+                });
+              } catch (e) {
+                console.log(`Error reading ${file}: ${e.message}`);
+              }
+            });
+            
+            if (issues.length > 0) {
+              console.log('📋 Documentation Issues Found:');
+              issues.slice(0, 10).forEach(issue => console.log(`- ${issue}`));
+              if (issues.length > 10) {
+                console.log(`... and ${issues.length - 10} more`);
+              }
+            } else {
+              console.log('✅ No documentation issues found');
+            }
+
+      - name: Commit Documentation Updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "Documentation Agent"
+          
+          if [ -n "$(git status --porcelain)" ]; then
+            git add .
+            git commit -m "📚 Auto-update documentation
+            
+            - Updated API documentation
+            - Refreshed changelog with recent commits
+            - Updated README stats
+            - Generated by Documentation Agent"
+            
+            git push
+            echo "Documentation updated and committed"
+          else
+            echo "No documentation changes to commit"
+          fi

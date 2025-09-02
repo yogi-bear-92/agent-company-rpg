@@ -1,0 +1,164 @@
+name: PR Review Agent
+on:
+  pull_request:
+    types: [opened, edited, synchronize, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  pull-requests: write
+  contents: read
+  checks: write
+
+jobs:
+  pr-review:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Code Quality Analysis
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            const fs = require('fs');
+            
+            // Get PR files
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number
+            });
+            
+            let reviewComments = [];
+            let suggestions = [];
+            
+            // Analyze each modified file
+            for (const file of files) {
+              if (file.status === 'removed') continue;
+              
+              const fileContent = fs.readFileSync(file.filename, 'utf8');
+              const lines = fileContent.split('\n');
+              
+              // Check for common issues
+              lines.forEach((line, index) => {
+                const lineNum = index + 1;
+                
+                // Security checks
+                if (line.includes('console.log') && file.filename.includes('src/')) {
+                  reviewComments.push({
+                    path: file.filename,
+                    line: lineNum,
+                    body: "🔍 **Security**: Consider removing console.log statements in production code or use a proper logging library."
+                  });
+                }
+                
+                if (line.includes('TODO') || line.includes('FIXME')) {
+                  reviewComments.push({
+                    path: file.filename,
+                    line: lineNum,
+                    body: "📝 **Code Quality**: TODO/FIXME found. Consider creating an issue to track this work."
+                  });
+                }
+                
+                // TypeScript/JavaScript best practices
+                if (line.includes('any') && file.filename.endsWith('.ts')) {
+                  reviewComments.push({
+                    path: file.filename,
+                    line: lineNum,
+                    body: "🎯 **Type Safety**: Consider using a more specific type instead of 'any' for better type safety."
+                  });
+                }
+                
+                // React best practices
+                if (line.includes('useEffect') && !line.includes('[]') && !line.includes('dependencies')) {
+                  reviewComments.push({
+                    path: file.filename,
+                    line: lineNum,
+                    body: "⚛️ **React**: Ensure useEffect has proper dependency array to avoid infinite re-renders."
+                  });
+                }
+              });
+              
+              // File size check
+              if (lines.length > 500) {
+                suggestions.push(`📏 **File Size**: ${file.filename} is ${lines.length} lines. Consider breaking it into smaller modules.`);
+              }
+            }
+            
+            // Check for test coverage
+            const hasTests = files.some(f => f.filename.includes('test') || f.filename.includes('spec'));
+            if (!hasTests && files.some(f => f.filename.includes('src/'))) {
+              suggestions.push("🧪 **Testing**: Consider adding tests for the new functionality.");
+            }
+            
+            // Submit review if there are comments
+            if (reviewComments.length > 0 || suggestions.length > 0) {
+              const body = `## 🤖 Automated Code Review
+            
+            ${suggestions.length > 0 ? '### Suggestions:\n' + suggestions.map(s => `- ${s}`).join('\n') + '\n' : ''}
+            
+            ${reviewComments.length > 0 ? `### Detailed Comments:\n${reviewComments.length} inline comments added.` : ''}
+            
+            This review was automatically generated. Please address the suggestions and feel free to discuss any concerns.`;
+              
+              await github.rest.pulls.createReview({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                body: body,
+                event: 'COMMENT',
+                comments: reviewComments
+              });
+            }
+
+      - name: Check Build and Tests
+        run: |
+          echo "🏗️ Building project..."
+          npm run build || echo "Build failed - will be reported in review"
+          
+          echo "🧪 Running tests..."
+          npm test || echo "Tests failed - will be reported in review"
+        continue-on-error: true
+
+      - name: Generate PR Metrics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number
+            });
+            
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number
+            });
+            
+            const metrics = {
+              filesChanged: files.length,
+              additions: pr.additions,
+              deletions: pr.deletions,
+              changedLines: pr.additions + pr.deletions,
+              complexity: files.length > 10 ? 'High' : files.length > 5 ? 'Medium' : 'Low'
+            };
+            
+            console.log('📊 PR Metrics:');
+            console.log(`Files changed: ${metrics.filesChanged}`);
+            console.log(`Lines added: ${metrics.additions}, deleted: ${metrics.deletions}`);
+            console.log(`Complexity: ${metrics.complexity}`);

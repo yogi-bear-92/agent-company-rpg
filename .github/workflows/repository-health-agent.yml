@@ -1,0 +1,293 @@
+name: Repository Health Agent
+on:
+  schedule:
+    - cron: '0 0 * * 1' # Weekly on Monday
+    - cron: '0 12 * * *' # Daily at noon for dependency checks
+  workflow_dispatch:
+    inputs:
+      full_scan:
+        description: 'Run full health scan'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  issues: write
+  security-events: write
+  pull-requests: write
+
+jobs:
+  health-monitoring:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Security Audit
+        id: security
+        run: |
+          echo "🔒 Running security audit..."
+          
+          # npm audit
+          npm audit --audit-level=moderate --json > audit-results.json 2>/dev/null || true
+          
+          VULNERABILITIES=$(jq -r '.metadata.vulnerabilities | to_entries | map(select(.value > 0)) | length' audit-results.json 2>/dev/null || echo "0")
+          
+          echo "vulnerabilities=$VULNERABILITIES" >> $GITHUB_OUTPUT
+          
+          if [ "$VULNERABILITIES" -gt 0 ]; then
+            echo "⚠️ Found $VULNERABILITIES vulnerability types"
+            jq -r '.advisories | to_entries | .[] | "- \(.value.title) (Severity: \(.value.severity))"' audit-results.json | head -10
+          else
+            echo "✅ No security vulnerabilities found"
+          fi
+
+      - name: Dependency Analysis
+        id: dependencies
+        run: |
+          echo "📦 Analyzing dependencies..."
+          
+          # Count dependencies
+          PROD_DEPS=$(jq -r '.dependencies | length' package.json 2>/dev/null || echo "0")
+          DEV_DEPS=$(jq -r '.devDependencies | length' package.json 2>/dev/null || echo "0")
+          
+          echo "Production dependencies: $PROD_DEPS"
+          echo "Development dependencies: $DEV_DEPS"
+          echo "prod_deps=$PROD_DEPS" >> $GITHUB_OUTPUT
+          echo "dev_deps=$DEV_DEPS" >> $GITHUB_OUTPUT
+          
+          # Check for outdated packages
+          npm outdated --json > outdated.json 2>/dev/null || echo "{}" > outdated.json
+          OUTDATED_COUNT=$(jq '. | length' outdated.json 2>/dev/null || echo "0")
+          
+          echo "Outdated packages: $OUTDATED_COUNT"
+          echo "outdated_count=$OUTDATED_COUNT" >> $GITHUB_OUTPUT
+          
+          if [ "$OUTDATED_COUNT" -gt 0 ]; then
+            echo "📋 Outdated packages:"
+            jq -r 'to_entries | .[] | "- \(.key): \(.value.current) → \(.value.latest)"' outdated.json | head -10
+          fi
+
+      - name: Code Quality Metrics
+        id: quality
+        run: |
+          echo "📊 Calculating code quality metrics..."
+          
+          # Count files and lines
+          TOTAL_FILES=$(find src -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" 2>/dev/null | wc -l || echo "0")
+          TOTAL_LINES=$(find src -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
+          
+          # Test coverage (if available)
+          COVERAGE="Not available"
+          if [ -f coverage/coverage-summary.json ]; then
+            COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json 2>/dev/null || echo "Not available")
+          fi
+          
+          # Code complexity indicators
+          TODO_COUNT=$(grep -r "TODO\|FIXME\|HACK" src/ 2>/dev/null | wc -l || echo "0")
+          CONSOLE_LOGS=$(grep -r "console\." src/ 2>/dev/null | wc -l || echo "0")
+          
+          echo "total_files=$TOTAL_FILES" >> $GITHUB_OUTPUT
+          echo "total_lines=$TOTAL_LINES" >> $GITHUB_OUTPUT
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+          echo "todo_count=$TODO_COUNT" >> $GITHUB_OUTPUT
+          echo "console_logs=$CONSOLE_LOGS" >> $GITHUB_OUTPUT
+          
+          echo "✅ Code metrics calculated"
+          echo "Files: $TOTAL_FILES, Lines: $TOTAL_LINES"
+          echo "TODOs: $TODO_COUNT, Console logs: $CONSOLE_LOGS"
+
+      - name: Build Health Check
+        id: build
+        run: |
+          echo "🏗️ Testing build health..."
+          
+          BUILD_TIME=$(date +%s)
+          npm run build 2>&1 | tee build.log || echo "Build failed" > build.log
+          BUILD_END=$(date +%s)
+          BUILD_DURATION=$((BUILD_END - BUILD_TIME))
+          
+          BUILD_STATUS="success"
+          if grep -q "error\|Error\|ERROR" build.log; then
+            BUILD_STATUS="failed"
+          fi
+          
+          echo "build_status=$BUILD_STATUS" >> $GITHUB_OUTPUT
+          echo "build_duration=$BUILD_DURATION" >> $GITHUB_OUTPUT
+          
+          echo "Build status: $BUILD_STATUS (${BUILD_DURATION}s)"
+
+      - name: Test Health Check
+        id: test
+        run: |
+          echo "🧪 Running test health check..."
+          
+          TEST_TIME=$(date +%s)
+          npm test 2>&1 | tee test.log || echo "Tests failed" > test.log
+          TEST_END=$(date +%s)
+          TEST_DURATION=$((TEST_END - TEST_TIME))
+          
+          TEST_STATUS="success"
+          if grep -q "failed\|error\|Error" test.log; then
+            TEST_STATUS="failed"
+          fi
+          
+          # Extract test count if available
+          TEST_COUNT=$(grep -o "[0-9]* test" test.log | head -1 | grep -o "[0-9]*" || echo "0")
+          
+          echo "test_status=$TEST_STATUS" >> $GITHUB_OUTPUT
+          echo "test_duration=$TEST_DURATION" >> $GITHUB_OUTPUT
+          echo "test_count=$TEST_COUNT" >> $GITHUB_OUTPUT
+          
+          echo "Test status: $TEST_STATUS (${TEST_DURATION}s, $TEST_COUNT tests)"
+
+      - name: Repository Structure Analysis
+        id: structure
+        run: |
+          echo "🗂️ Analyzing repository structure..."
+          
+          # Check for important files
+          FILES_CHECK=""
+          for file in "README.md" "package.json" ".gitignore" "tsconfig.json"; do
+            if [ -f "$file" ]; then
+              FILES_CHECK="${FILES_CHECK}✅ $file "
+            else
+              FILES_CHECK="${FILES_CHECK}❌ $file "
+            fi
+          done
+          
+          # Check directory structure
+          DIRS_CHECK=""
+          for dir in "src" ".github" "docs"; do
+            if [ -d "$dir" ]; then
+              DIRS_CHECK="${DIRS_CHECK}✅ $dir "
+            else
+              DIRS_CHECK="${DIRS_CHECK}❌ $dir "
+            fi
+          done
+          
+          echo "files_check=$FILES_CHECK" >> $GITHUB_OUTPUT
+          echo "dirs_check=$DIRS_CHECK" >> $GITHUB_OUTPUT
+
+      - name: Generate Health Report
+        uses: actions/github-script@v7
+        env:
+          VULNERABILITIES: ${{ steps.security.outputs.vulnerabilities }}
+          PROD_DEPS: ${{ steps.dependencies.outputs.prod_deps }}
+          DEV_DEPS: ${{ steps.dependencies.outputs.dev_deps }}
+          OUTDATED_COUNT: ${{ steps.dependencies.outputs.outdated_count }}
+          TOTAL_FILES: ${{ steps.quality.outputs.total_files }}
+          TOTAL_LINES: ${{ steps.quality.outputs.total_lines }}
+          COVERAGE: ${{ steps.quality.outputs.coverage }}
+          TODO_COUNT: ${{ steps.quality.outputs.todo_count }}
+          CONSOLE_LOGS: ${{ steps.quality.outputs.console_logs }}
+          BUILD_STATUS: ${{ steps.build.outputs.build_status }}
+          BUILD_DURATION: ${{ steps.build.outputs.build_duration }}
+          TEST_STATUS: ${{ steps.test.outputs.test_status }}
+          TEST_DURATION: ${{ steps.test.outputs.test_duration }}
+          TEST_COUNT: ${{ steps.test.outputs.test_count }}
+          FILES_CHECK: ${{ steps.structure.outputs.files_check }}
+          DIRS_CHECK: ${{ steps.structure.outputs.dirs_check }}
+        with:
+          script: |
+            const report = `# 🏥 Repository Health Report
+            
+            **Generated**: ${new Date().toISOString()}
+            **Repository**: ${context.repo.owner}/${context.repo.repo}
+            
+            ## 🔒 Security Status
+            - **Vulnerabilities**: ${process.env.VULNERABILITIES} types found
+            - **Status**: ${process.env.VULNERABILITIES === '0' ? '✅ Secure' : '⚠️ Needs attention'}
+            
+            ## 📦 Dependencies
+            - **Production**: ${process.env.PROD_DEPS} packages
+            - **Development**: ${process.env.DEV_DEPS} packages  
+            - **Outdated**: ${process.env.OUTDATED_COUNT} packages
+            - **Status**: ${process.env.OUTDATED_COUNT === '0' ? '✅ Up to date' : '🔄 Updates available'}
+            
+            ## 📊 Code Quality
+            - **Files**: ${process.env.TOTAL_FILES}
+            - **Lines**: ${process.env.TOTAL_LINES}
+            - **Test Coverage**: ${process.env.COVERAGE}%
+            - **TODOs**: ${process.env.TODO_COUNT}
+            - **Console Logs**: ${process.env.CONSOLE_LOGS}
+            
+            ## 🏗️ Build & Test Health  
+            - **Build**: ${process.env.BUILD_STATUS === 'success' ? '✅' : '❌'} (${process.env.BUILD_DURATION}s)
+            - **Tests**: ${process.env.TEST_STATUS === 'success' ? '✅' : '❌'} (${process.env.TEST_DURATION}s, ${process.env.TEST_COUNT} tests)
+            
+            ## 🗂️ Repository Structure
+            - **Files**: ${process.env.FILES_CHECK}
+            - **Directories**: ${process.env.DIRS_CHECK}
+            
+            ## 📈 Health Score
+            ${process.env.VULNERABILITIES === '0' && process.env.BUILD_STATUS === 'success' && process.env.TEST_STATUS === 'success' ? 
+              '🟢 **Excellent** (90-100%)' : 
+              process.env.BUILD_STATUS === 'success' && process.env.TEST_STATUS === 'success' ? 
+                '🟡 **Good** (70-89%)' : '🔴 **Needs Improvement** (<70%)'
+            }
+            
+            ---
+            *Generated by Repository Health Agent*`;
+            
+            console.log(report);
+            
+            // Create or update health report issue
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['health-report'],
+              state: 'open'
+            });
+            
+            if (issues.length > 0) {
+              // Update existing issue
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues[0].number,
+                body: report
+              });
+              console.log('Updated existing health report issue #' + issues[0].number);
+            } else {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🏥 Repository Health Report - ' + new Date().toISOString().split('T')[0],
+                body: report,
+                labels: ['health-report', 'type:monitoring']
+              });
+              console.log('Created new health report issue');
+            }
+            
+            // Create issues for critical problems
+            if (process.env.VULNERABILITIES !== '0') {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🔒 Security Vulnerabilities Detected',
+                body: `Security audit found ${process.env.VULNERABILITIES} vulnerability types.\n\nPlease run \`npm audit\` and address the issues.\n\n*Auto-created by Repository Health Agent*`,
+                labels: ['security', 'priority:high']
+              });
+            }
+            
+            if (process.env.BUILD_STATUS !== 'success') {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🏗️ Build Health Issue Detected',
+                body: `Build is currently failing. Please check the build process.\n\n*Auto-created by Repository Health Agent*`,
+                labels: ['build', 'priority:high']
+              });
+            }

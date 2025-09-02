@@ -1,0 +1,253 @@
+name: Release Coordination Agent
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release Type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+        - prerelease
+      pre_release:
+        description: 'Pre-release'
+        required: false
+        default: false
+        type: boolean
+  
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  release-planning:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[release]'))
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Tests
+        run: |
+          echo "🧪 Running test suite..."
+          npm test || (echo "❌ Tests failed - cannot proceed with release" && exit 1)
+
+      - name: Check Release Readiness
+        id: check
+        run: |
+          echo "🔍 Checking release readiness..."
+          
+          # Check if there are any critical issues
+          CRITICAL_ISSUES=$(gh issue list --label "priority:critical" --state open --json number | jq '. | length')
+          
+          if [ "$CRITICAL_ISSUES" -gt 0 ]; then
+            echo "⚠️  Warning: $CRITICAL_ISSUES critical issues remain open"
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check if build passes
+          npm run build || (echo "❌ Build failed - cannot release" && exit 1)
+          
+          echo "✅ Release readiness check passed"
+          echo "should_release=true" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine Version
+        id: version
+        if: steps.check.outputs.should_release == 'true'
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RELEASE_TYPE="${{ github.event.inputs.release_type }}"
+          else
+            # Auto-determine release type from commit messages since last tag
+            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            
+            if git log $LAST_TAG..HEAD --pretty=format:"%s" | grep -q "BREAKING CHANGE\|feat!"; then
+              RELEASE_TYPE="major"
+            elif git log $LAST_TAG..HEAD --pretty=format:"%s" | grep -q "^feat"; then
+              RELEASE_TYPE="minor"
+            else
+              RELEASE_TYPE="patch"
+            fi
+          fi
+          
+          echo "Current version: $CURRENT_VERSION"
+          echo "Release type: $RELEASE_TYPE"
+          
+          # Calculate new version
+          IFS='.' read -r major minor patch <<< "${CURRENT_VERSION//v/}"
+          
+          case $RELEASE_TYPE in
+            major)
+              NEW_VERSION="$((major + 1)).0.0"
+              ;;
+            minor)
+              NEW_VERSION="$major.$((minor + 1)).0"
+              ;;
+            patch)
+              NEW_VERSION="$major.$minor.$((patch + 1))"
+              ;;
+            prerelease)
+              NEW_VERSION="$major.$minor.$patch-beta.$(date +%s)"
+              ;;
+          esac
+          
+          echo "New version: $NEW_VERSION"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+  release:
+    needs: release-planning
+    runs-on: ubuntu-latest
+    if: needs.release-planning.outputs.should_release == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Update Version
+        run: |
+          NEW_VERSION="${{ needs.release-planning.outputs.version }}"
+          
+          # Update package.json
+          npm version $NEW_VERSION --no-git-tag-version
+          
+          # Update README.md if it contains version info
+          if grep -q "version" README.md; then
+            sed -i.bak "s/version [0-9]\+\.[0-9]\+\.[0-9]\+/version $NEW_VERSION/g" README.md
+          fi
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          NEW_VERSION="${{ needs.release-planning.outputs.version }}"
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~10")
+          
+          echo "📝 Generating release notes for version $NEW_VERSION"
+          
+          # Create release notes
+          cat > RELEASE_NOTES.md << EOF
+          # Release $NEW_VERSION
+          
+          ## 🚀 What's New
+          
+          EOF
+          
+          # Add features
+          echo "### ✨ Features" >> RELEASE_NOTES.md
+          git log $LAST_TAG..HEAD --pretty=format:"- %s (%h)" --grep="^feat" >> RELEASE_NOTES.md || echo "- No new features" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          
+          # Add fixes
+          echo "### 🐛 Bug Fixes" >> RELEASE_NOTES.md
+          git log $LAST_TAG..HEAD --pretty=format:"- %s (%h)" --grep="^fix" >> RELEASE_NOTES.md || echo "- No bug fixes" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          
+          # Add other changes
+          echo "### 🔧 Other Changes" >> RELEASE_NOTES.md
+          git log $LAST_TAG..HEAD --pretty=format:"- %s (%h)" --grep="^docs\|^chore\|^style\|^refactor" >> RELEASE_NOTES.md || echo "- No other changes" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          
+          # Add contributors
+          echo "### 👥 Contributors" >> RELEASE_NOTES.md
+          git log $LAST_TAG..HEAD --pretty=format:"- @%an" | sort | uniq >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          
+          # Add deployment info
+          echo "### 🚀 Deployment" >> RELEASE_NOTES.md
+          echo "- Build: $(npm run build --silent 2>/dev/null && echo 'Passing' || echo 'Failed')" >> RELEASE_NOTES.md
+          echo "- Tests: $(npm test --silent 2>/dev/null && echo 'Passing' || echo 'Failed')" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          
+          echo "Release notes generated"
+          cat RELEASE_NOTES.md
+
+      - name: Commit Version Update
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "Release Coordination Agent"
+          
+          git add .
+          git commit -m "🚀 Release v${{ needs.release-planning.outputs.version }}
+
+          - Automated version bump
+          - Updated documentation
+          - Generated release notes"
+
+      - name: Create Release
+        id: create_release
+        run: |
+          NEW_VERSION="${{ needs.release-planning.outputs.version }}"
+          
+          # Create git tag
+          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+          
+          # Push changes and tags
+          git push origin main
+          git push origin "v$NEW_VERSION"
+          
+          # Create GitHub release
+          gh release create "v$NEW_VERSION" \
+            --title "🚀 Release v$NEW_VERSION" \
+            --notes-file RELEASE_NOTES.md \
+            ${{ github.event.inputs.pre_release == 'true' && '--prerelease' || '' }}
+          
+          echo "✅ Release v$NEW_VERSION created successfully"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post-Release Tasks
+        run: |
+          echo "📋 Running post-release tasks..."
+          
+          # Create post-release issues for follow-up work
+          gh issue create \
+            --title "📊 Post-Release: Monitor v${{ needs.release-planning.outputs.version }} Performance" \
+            --body "Monitor the performance and stability of release v${{ needs.release-planning.outputs.version }}.
+
+          **Tasks:**
+          - [ ] Monitor error rates
+          - [ ] Check user feedback
+          - [ ] Review performance metrics
+          - [ ] Update documentation if needed
+
+          Auto-created by Release Coordination Agent" \
+            --label "type:monitoring,priority:medium"
+          
+          echo "✅ Post-release monitoring issue created"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

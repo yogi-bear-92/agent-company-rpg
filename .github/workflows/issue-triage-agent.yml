@@ -1,0 +1,144 @@
+name: Issue Triage Agent
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: '0 */6 * * *' # Run every 6 hours
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  issue-triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Issue Analysis and Labeling
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+
+            for (const issue of issues) {
+              if (issue.pull_request) continue; // Skip PRs
+              
+              const title = issue.title.toLowerCase();
+              const body = (issue.body || '').toLowerCase();
+              const content = `${title} ${body}`;
+              
+              // Automated labeling based on content analysis
+              const labels = [];
+              
+              // Component detection
+              if (content.includes('frontend') || content.includes('ui') || content.includes('dashboard')) {
+                labels.push('component:frontend');
+              }
+              if (content.includes('backend') || content.includes('api') || content.includes('server')) {
+                labels.push('component:backend');
+              }
+              if (content.includes('database') || content.includes('storage')) {
+                labels.push('component:database');
+              }
+              
+              // Feature detection
+              if (content.includes('rpg') || content.includes('game') || content.includes('skill')) {
+                labels.push('feature:rpg-mechanics');
+              }
+              if (content.includes('knowledge') || content.includes('learning') || content.includes('ai')) {
+                labels.push('feature:knowledge-system');
+              }
+              if (content.includes('ml') || content.includes('training') || content.includes('model')) {
+                labels.push('feature:ml-training');
+              }
+              
+              // Type detection
+              if (content.includes('bug') || content.includes('error') || content.includes('fix')) {
+                labels.push('type:bug');
+              }
+              if (content.includes('performance') || content.includes('optimization') || content.includes('speed')) {
+                labels.push('type:performance');
+              }
+              if (content.includes('documentation') || content.includes('docs') || content.includes('readme')) {
+                labels.push('type:documentation');
+              }
+              if (content.includes('enhancement') || content.includes('improvement') || content.includes('feature')) {
+                labels.push('type:enhancement');
+              }
+              
+              // Priority detection based on keywords
+              if (title.includes('[critical]') || content.includes('critical') || content.includes('urgent')) {
+                labels.push('priority:critical');
+              } else if (title.includes('[high]') || content.includes('important') || content.includes('asap')) {
+                labels.push('priority:high');
+              } else if (title.includes('[low]') || content.includes('nice to have') || content.includes('optional')) {
+                labels.push('priority:low');
+              } else {
+                labels.push('priority:medium');
+              }
+              
+              // Apply labels if they don't already exist
+              const existingLabels = issue.labels.map(label => label.name);
+              const newLabels = labels.filter(label => !existingLabels.includes(label));
+              
+              if (newLabels.length > 0) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: newLabels
+                });
+                
+                console.log(`Added labels to issue #${issue.number}: ${newLabels.join(', ')}`);
+              }
+              
+              // Detect duplicates and link related issues
+              const duplicates = issues.filter(otherIssue => 
+                otherIssue.number !== issue.number &&
+                otherIssue.title.toLowerCase().includes(title.split(' ')[0]) ||
+                title.includes(otherIssue.title.toLowerCase().split(' ')[0])
+              );
+              
+              if (duplicates.length > 0 && !issue.body.includes('Possibly related to')) {
+                const relatedText = `\n\n---\n**🤖 Issue Triage Agent**: Possibly related to ${duplicates.map(d => `#${d.number}`).join(', ')}`;
+                
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: relatedText
+                });
+              }
+            }
+
+      - name: Generate Triage Report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+            
+            const stats = {
+              total: issues.filter(i => !i.pull_request).length,
+              critical: issues.filter(i => i.labels.some(l => l.name === 'priority:critical')).length,
+              high: issues.filter(i => i.labels.some(l => l.name === 'priority:high')).length,
+              medium: issues.filter(i => i.labels.some(l => l.name === 'priority:medium')).length,
+              low: issues.filter(i => i.labels.some(l => l.name === 'priority:low')).length,
+              unlabeled: issues.filter(i => !i.pull_request && i.labels.length === 0).length
+            };
+            
+            console.log('📊 Issue Triage Report:');
+            console.log(`Total open issues: ${stats.total}`);
+            console.log(`Critical: ${stats.critical}, High: ${stats.high}, Medium: ${stats.medium}, Low: ${stats.low}`);
+            console.log(`Unlabeled: ${stats.unlabeled}`);
