@@ -20,6 +20,7 @@ export default function App() {
   const [agents, setAgents] = useState<Agent[]>(initialAgents);
   const [currentLevelUpEvent, setCurrentLevelUpEvent] = useState<LevelUpEvent | null>(null);
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
+  const [levelingAgents, setLevelingAgents] = useState<Set<number>>(new Set());
 
   // Initialize level progression system
   const progression = useQuestProgression();
@@ -96,13 +97,22 @@ export default function App() {
     }
   };
 
-  const renderXPBar = (current: number, toNext: number, level: number) => {
+  const renderXPBar = (current: number, toNext: number, level: number, agent?: Agent) => {
     const percentage = (current / toNext) * 100;
+    const isLevelingUp = agent && levelingAgents.has(agent.id);
+    
     return (
-      <div className="xp-bar">
+      <div className="xp-bar relative">
         <div 
-          className="xp-progress" 
-          style={{ width: `${percentage}%` }}
+          className={`xp-progress ${isLevelingUp ? 'xp-multi-level' : ''}`}
+          style={{ 
+            width: `${percentage}%`,
+            '--xp-percentage': `${percentage}%`,
+            '--xp-start': '0%',
+            '--xp-final': `${percentage}%`,
+            animation: isLevelingUp ? 'xpBarMultiLevel 2s ease-out' : undefined,
+            transition: !isLevelingUp ? 'width 0.5s ease-out' : undefined
+          } as React.CSSProperties}
         ></div>
         <div className="absolute inset-0 flex items-center justify-center text-xs font-medium">
           Level {level} • {current}/{toNext} XP
@@ -133,7 +143,7 @@ export default function App() {
       </div>
       
       <div className="relative">
-        {renderXPBar(agent.xp, agent.xpToNext, agent.level)}
+        {renderXPBar(agent.xp, agent.xpToNext, agent.level, agent)}
       </div>
       
       <div className="grid grid-cols-5 gap-2 text-xs">
@@ -272,13 +282,36 @@ export default function App() {
   useEffect(() => {
     // Handle level up events
     progression.onLevelUp((event: LevelUpEvent) => {
+      // Mark agent as leveling up for smooth animation
+      setLevelingAgents(prev => new Set(prev).add(event.agentId));
+      
       setCurrentLevelUpEvent(event);
       setShowLevelUpModal(true);
+      
+      // Remove leveling animation after 2 seconds
+      setTimeout(() => {
+        setLevelingAgents(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(event.agentId);
+          return newSet;
+        });
+      }, 2000);
     });
 
     // Handle XP gain events for visual feedback
     progression.onXpGain((event) => {
       console.log('XP gained:', event);
+      // Briefly highlight the agent when gaining XP
+      if (event.agentId) {
+        setLevelingAgents(prev => new Set(prev).add(event.agentId));
+        setTimeout(() => {
+          setLevelingAgents(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(event.agentId);
+            return newSet;
+          });
+        }, 500);
+      }
     });
 
     // Handle skill unlock events

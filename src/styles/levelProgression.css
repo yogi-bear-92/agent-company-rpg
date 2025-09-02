@@ -22,8 +22,27 @@
 }
 
 @keyframes xpBarFill {
-  0% { width: 0%; }
+  0% { width: var(--xp-start, 0%); }
   100% { width: var(--xp-percentage); }
+}
+
+@keyframes xpBarMultiLevel {
+  0% { 
+    width: var(--xp-start, 0%);
+    background: linear-gradient(90deg, #4f46e5, #7c3aed);
+  }
+  45% { 
+    width: 100%;
+    background: linear-gradient(90deg, #7c3aed, #ec4899);
+  }
+  50% {
+    width: 0%;
+    background: linear-gradient(90deg, #ec4899, #f59e0b);
+  }
+  100% { 
+    width: var(--xp-final, 50%);
+    background: linear-gradient(90deg, #4f46e5, #7c3aed);
+  }
 }
 
 @keyframes bounceIn {
