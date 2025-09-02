@@ -247,7 +247,7 @@ describe('Game Flow End-to-End Tests', () => {
       render(<App />);
 
       // Mock a level up event with skill unlocks
-      // const mockLevelUpEvent // unused: = {
+      const mockLevelUpEvent = {
         agentId: 1,
         oldLevel: 5,
         newLevel: 6,
@@ -323,7 +323,7 @@ describe('Game Flow End-to-End Tests', () => {
         await user.click(completeButton);
 
         // Should show completion confirmation
-        await waitFor(() => {
+        await waitFor(async () => {
           const confirmation = screen.queryByText(/complete.*quest|confirm/i);
           if (confirmation) {
             expect(confirmation).toBeInTheDocument();

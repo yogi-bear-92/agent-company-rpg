@@ -359,7 +359,7 @@ describe('AgentSheet Component', () => {
 
   describe('Interactive Features', () => {
     it('should call onMissionAssign when assign mission button is clicked', async () => {
-      // const user = userEvent.setup(); // unused
+      const user = userEvent.setup();
       
       render(
         <AgentSheet 
@@ -437,7 +437,7 @@ describe('AgentSheet Component', () => {
     });
 
     it('should be keyboard navigable', async () => {
-      // const user = userEvent.setup(); // unused
+      const user = userEvent.setup();
       
       render(
         <AgentSheet 
