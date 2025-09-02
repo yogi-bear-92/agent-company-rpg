@@ -256,3 +256,10 @@ MIT License - see [LICENSE](LICENSE) file for details
 ---
 
 **🤖 Built with Claude Code + Swarm Intelligence**
+## 📊 Project Stats
+
+- **Components**: 10
+- **AI Agents**: 5  
+- **Total Source Files**: 21
+- **Last Updated**: 2025-09-02
+
