@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900;
+    @apply text-white min-h-screen;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-lg;
+  }
+  
+  .agent-card {
+    @apply bg-slate-900/50 rounded-lg border border-slate-600 hover:border-purple-500 transition-colors cursor-pointer;
+  }
+  
+  .xp-bar {
+    @apply w-full bg-slate-700 rounded-full h-2;
+  }
+  
+  .xp-progress {
+    @apply bg-gradient-to-r from-purple-500 to-cyan-500 h-2 rounded-full transition-all duration-500;
+  }
+}
