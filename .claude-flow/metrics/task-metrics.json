@@ -1,10 +1,10 @@
 [
   {
-    "id": "cmd-github-1756772952515",
-    "type": "github",
+    "id": "cmd-memory-1756776793718",
+    "type": "memory",
     "success": true,
-    "duration": 492.268916,
-    "timestamp": 1756772953007,
+    "duration": 1.6249169999999964,
+    "timestamp": 1756776793719,
     "metadata": {}
   }
 ]

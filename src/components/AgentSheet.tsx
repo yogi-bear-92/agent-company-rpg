@@ -1,4 +1,3 @@
-import React from 'react';
 import { Agent } from '../types/agent';
 
 interface AgentSheetProps {

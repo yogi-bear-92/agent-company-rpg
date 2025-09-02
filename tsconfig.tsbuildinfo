@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/agentsheet.tsx","./src/components/questboard.tsx","./src/data/agents.ts","./src/data/quests.ts","./src/types/agent.ts","./src/types/quest.ts"],"version":"5.9.2"}

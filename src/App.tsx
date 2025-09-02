@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Agent, AppState } from './types/agent';
 import { initialAgents } from './data/agents';
 import AgentSheet from './components/AgentSheet';
+import QuestBoard from './components/QuestBoard';
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>({
@@ -12,7 +13,27 @@ export default function App() {
     realtimeUpdates: []
   });
 
-  const [agents] = useState<Agent[]>(initialAgents);
+  const [agents, setAgents] = useState<Agent[]>(initialAgents);
+
+  const handleQuestAssign = (questId: string, agentIds: number[]) => {
+    console.log(`Assigning quest ${questId} to agents:`, agentIds);
+    // Update agents with quest assignment
+    setAgents(prev => prev.map(agent => 
+      agentIds.includes(agent.id)
+        ? { ...agent, currentMission: `Quest: ${questId}` }
+        : agent
+    ));
+  };
+
+  const handleQuestStart = (questId: string) => {
+    console.log(`Starting quest ${questId}`);
+    // Could trigger Claude Flow swarm here
+  };
+
+  const handleQuestComplete = (questId: string) => {
+    console.log(`Completing quest ${questId}`);
+    // Award XP and rewards to agents
+  };
 
   const renderXPBar = (current: number, toNext: number, level: number) => {
     const percentage = (current / toNext) * 100;
@@ -207,9 +228,13 @@ export default function App() {
             '📊 Analytics Dashboard', 
             'Deep insights into agent performance, learning patterns, and optimization opportunities'
           )}
-          {appState.activeTab === 'quests' && renderPlaceholder(
-            '⚔️ Quest Board', 
-            'Available missions and challenges for your agents to tackle'
+          {appState.activeTab === 'quests' && (
+            <QuestBoard
+              agents={agents}
+              onQuestAssign={handleQuestAssign}
+              onQuestStart={handleQuestStart}
+              onQuestComplete={handleQuestComplete}
+            />
           )}
         </div>
         
