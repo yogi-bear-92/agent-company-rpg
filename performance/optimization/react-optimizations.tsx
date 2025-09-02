@@ -197,7 +197,7 @@ export const DebouncedSearch = memo(({
     
     timeoutRef.current = setTimeout(() => {
       onSearch(query);
-    }, delay) as NodeJS.Timeout;
+    }, delay);
 
     return () => {
       if (timeoutRef.current) {

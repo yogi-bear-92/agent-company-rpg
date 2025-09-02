@@ -1,5 +1,5 @@
 // Performance monitoring provider for React app
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { performanceMonitor } from '../monitoring/performance-monitor';
 import { webVitalsDashboard, WebVitalsMetric } from '../monitoring/web-vitals';
 import { performanceReportGenerator } from '../reports/performance-report-generator';
@@ -10,7 +10,7 @@ interface PerformanceContextType {
   performanceScore: number;
   startMonitoring: () => void;
   stopMonitoring: () => void;
-  generateReport: () => Promise<any>;
+  generateReport: () => Promise<Record<string, unknown>>;
   clearMetrics: () => void;
 }
 
@@ -27,30 +27,17 @@ export function usePerformanceContext() {
 interface PerformanceProviderProps {
   children: ReactNode;
   enableInProduction?: boolean;
-  reportingInterval?: number; // milliseconds
 }
 
 export function PerformanceProvider({ 
   children, 
-  enableInProduction = false,
-  reportingInterval = 30000
+  enableInProduction = false
 }: PerformanceProviderProps) {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [webVitals, setWebVitals] = useState<WebVitalsMetric[]>([]);
   const [performanceScore, setPerformanceScore] = useState(100);
 
-  useEffect(() => {
-    // Only enable monitoring in development or if explicitly enabled in production
-    if (process.env.NODE_ENV === 'development' || enableInProduction) {
-      startMonitoring();
-    }
-
-    return () => {
-      stopMonitoring();
-    };
-  }, [enableInProduction]);
-
-  const startMonitoring = () => {
+  const startMonitoring = useCallback(() => {
     if (isMonitoring) return;
     
     setIsMonitoring(true);
@@ -69,28 +56,36 @@ export function PerformanceProvider({
     }, 5000);
 
     // Store cleanup functions
-    (window as any).__performanceCleanup = (): void => {
+    (window as Record<string, unknown>).__performanceCleanup = () => {
       unsubscribe();
       clearInterval(scoreInterval);
     };
-  };
+  }, [isMonitoring]);
 
-  const stopMonitoring = () => {
+  const stopMonitoring = useCallback(() => {
     if (!isMonitoring) return;
     
     setIsMonitoring(false);
     
-    const cleanupFn = (window as any).__performanceCleanup as (() => void) | undefined;
-    if (cleanupFn) {
-      cleanupFn();
-      delete (window as any).__performanceCleanup;
+    const cleanup = (window as Record<string, unknown>).__performanceCleanup;
+    if (typeof cleanup === 'function') {
+      cleanup();
+      delete (window as Record<string, unknown>).__performanceCleanup;
+    }
+  }, [isMonitoring]);
+
+  useEffect(() => {
+    // Only enable monitoring in development or if explicitly enabled in production
+    if (process.env.NODE_ENV === 'development' || enableInProduction) {
+      startMonitoring();
     }
 
-    // Prevent React refresh warnings by ensuring reportingInterval is used
-    void reportingInterval;
-  };
+    return () => {
+      stopMonitoring();
+    };
+  }, [enableInProduction, startMonitoring, stopMonitoring]);
 
-  const generateReport = async () => {
+  const generateReport = async (): Promise<Record<string, unknown>> => {
     return await performanceReportGenerator.generateComprehensiveReport();
   };
 
@@ -138,6 +133,7 @@ function PerformanceOverlay() {
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="w-full h-16 flex items-center justify-center text-white hover:bg-white/10 rounded-lg"
+          aria-label={isExpanded ? 'Collapse performance overlay' : 'Expand performance overlay'}
         >
           {isExpanded ? '📊' : '⚡'}
         </button>
