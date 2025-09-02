@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Agent, AppState } from './types/agent';
 import { initialAgents } from './data/agents';
 import AgentSheet from './components/AgentSheet';
 import QuestBoard from './components/QuestBoard';
+import { LevelUpNotification, NotificationContainer } from './components/LevelUpNotification';
+import { useQuestProgression } from './hooks/useLevelProgression';
+import { LevelUpEvent } from './utils/levelProgression';
+import { Quest } from './types/quest';
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>({
@@ -14,6 +18,11 @@ export default function App() {
   });
 
   const [agents, setAgents] = useState<Agent[]>(initialAgents);
+  const [currentLevelUpEvent, setCurrentLevelUpEvent] = useState<LevelUpEvent | null>(null);
+  const [showLevelUpModal, setShowLevelUpModal] = useState(false);
+
+  // Initialize level progression system
+  const progression = useQuestProgression();
 
   const handleQuestAssign = (questId: string, agentIds: number[]) => {
     console.log(`Assigning quest ${questId} to agents:`, agentIds);
@@ -30,9 +39,61 @@ export default function App() {
     // Could trigger Claude Flow swarm here
   };
 
-  const handleQuestComplete = (questId: string) => {
+  const handleQuestComplete = async (questId: string) => {
     console.log(`Completing quest ${questId}`);
-    // Award XP and rewards to agents
+    
+    // Find the quest from data (you would typically have quest data available)
+    // For demo purposes, creating a mock quest
+    const mockQuest: Quest = {
+      id: questId,
+      title: `Quest ${questId}`,
+      description: `Complete quest ${questId}`,
+      type: 'side',
+      category: 'Investigation',
+      difficulty: 'Medium',
+      status: 'active',
+      icon: '⚔️',
+      objectives: [{
+        id: '1',
+        description: 'Complete the main objective',
+        completed: true,
+        progress: 1,
+        maxProgress: 1
+      }],
+      currentObjectiveIndex: 0,
+      progressPercentage: 100,
+      requirements: {},
+      rewards: { xp: 150 },
+      assignedAgents: agents.slice(0, 2).map(a => a.id), // Assign to first 2 agents
+      recommendedTeamSize: 2,
+      autoAssign: false,
+      dialogue: [],
+      createdAt: new Date(),
+      repeatable: false
+    };
+
+    try {
+      // Complete quest with level progression
+      const updatedAgents = await progression.completeQuestWithTracking(
+        questId,
+        mockQuest,
+        agents.filter(a => mockQuest.assignedAgents.includes(a.id)),
+        {
+          completionTime: 45, // 45 minutes
+          optionalObjectivesCompleted: 1,
+          teamPerformanceBonus: 1.2
+        }
+      );
+
+      // Update agent state with new progression
+      setAgents(prev => prev.map(agent => {
+        const updated = updatedAgents.find(a => a.id === agent.id);
+        return updated || agent;
+      }));
+
+    } catch (error) {
+      console.error('Error completing quest:', error);
+    }
   };
 
   const renderXPBar = (current: number, toNext: number, level: number) => {
@@ -53,7 +114,8 @@ export default function App() {
   const renderAgentCard = (agent: Agent) => (
     <div 
       key={agent.id} 
-      className="agent-card p-4 space-y-3"
+      data-agent-id={agent.id}
+      className="agent-card p-4 space-y-3 transition-all duration-300"
       onClick={() => setAppState(prev => ({ ...prev, selectedAgent: agent }))}
     >
       <div className="flex items-center justify-between">
@@ -206,6 +268,25 @@ export default function App() {
     </div>
   );
 
+  // Set up level progression event handlers
+  useEffect(() => {
+    // Handle level up events
+    progression.onLevelUp((event: LevelUpEvent) => {
+      setCurrentLevelUpEvent(event);
+      setShowLevelUpModal(true);
+    });
+
+    // Handle XP gain events for visual feedback
+    progression.onXpGain((event) => {
+      console.log('XP gained:', event);
+    });
+
+    // Handle skill unlock events
+    progression.onSkillUnlock((event) => {
+      console.log('Skill unlocked:', event);
+    });
+  }, [progression]);
+
   return (
     <div className="min-h-screen p-6">
       <div className="max-w-7xl mx-auto">
@@ -243,6 +324,24 @@ export default function App() {
           <AgentSheet 
             agent={appState.selectedAgent} 
             onClose={() => setAppState(prev => ({ ...prev, selectedAgent: null }))}
+          />
+        )}
+        
+        {/* Level progression integration */}
+        <NotificationContainer 
+          notifications={progression.activeNotifications}
+          onDismiss={progression.dismissNotification}
+        />
+
+        {/* Level up modal */}
+        {currentLevelUpEvent && showLevelUpModal && (
+          <LevelUpNotification
+            agent={agents.find(a => a.id === currentLevelUpEvent.agentId)!}
+            levelUpEvent={currentLevelUpEvent}
+            onClose={() => {
+              setShowLevelUpModal(false);
+              setCurrentLevelUpEvent(null);
+            }}
           />
         )}
       </div>

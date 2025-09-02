@@ -1,0 +1,290 @@
+/* Level progression animations and styles for Agent Company RPG */
+
+@keyframes flash {
+  0% { opacity: 0; }
+  50% { opacity: 0.3; }
+  100% { opacity: 0; }
+}
+
+@keyframes levelUpGlow {
+  0% { 
+    box-shadow: 0 0 0 rgba(255, 215, 0, 0);
+    transform: scale(1);
+  }
+  50% { 
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
+    transform: scale(1.05);
+  }
+  100% { 
+    box-shadow: 0 0 0 rgba(255, 215, 0, 0);
+    transform: scale(1);
+  }
+}
+
+@keyframes xpBarFill {
+  0% { width: 0%; }
+  100% { width: var(--xp-percentage); }
+}
+
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(-20px);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1) translateY(-10px);
+  }
+  70% {
+    transform: scale(0.95) translateY(-5px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  0% {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes sparkle {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1) rotate(180deg);
+  }
+}
+
+@keyframes notificationSlide {
+  0% {
+    transform: translateX(100%) scale(0.95);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes modalGrow {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes statIncrease {
+  0% {
+    transform: translateY(0);
+    color: inherit;
+  }
+  50% {
+    transform: translateY(-5px);
+    color: #10b981;
+  }
+  100% {
+    transform: translateY(0);
+    color: inherit;
+  }
+}
+
+/* Component classes */
+.level-up-glow {
+  animation: levelUpGlow 2s ease-out;
+}
+
+.xp-bar-animated {
+  position: relative;
+  overflow: hidden;
+}
+
+.xp-bar-animated::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+.notification-toast {
+  animation: notificationSlide 0.3s ease-out;
+}
+
+.notification-toast.exiting {
+  animation: slideInRight 0.3s ease-in reverse;
+}
+
+.level-up-modal {
+  animation: modalGrow 0.5s ease-out;
+}
+
+.level-up-modal.exiting {
+  animation: modalGrow 0.3s ease-in reverse;
+}
+
+.stat-boost {
+  animation: statIncrease 0.6s ease-out;
+}
+
+.skill-unlock {
+  animation: bounceIn 0.6s ease-out;
+}
+
+.particle-effect {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.sparkle-effect {
+  animation: sparkle 1.5s infinite;
+}
+
+/* Agent card level progression styles */
+.agent-card[data-leveling-up="true"] {
+  animation: levelUpGlow 2s ease-out;
+  position: relative;
+}
+
+.agent-card[data-leveling-up="true"]::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(45deg, #ffd700, #ffed4e, #f7c41f, #ffd700);
+  background-size: 200% 200%;
+  border-radius: inherit;
+  z-index: -1;
+  animation: rainbow-border 2s linear infinite;
+}
+
+@keyframes rainbow-border {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* XP number animations */
+.xp-gained {
+  animation: bounceIn 0.5s ease-out;
+  color: #10b981;
+  font-weight: bold;
+}
+
+.level-number {
+  transition: all 0.3s ease-out;
+}
+
+.level-number.leveled-up {
+  animation: statIncrease 1s ease-out;
+  color: #ffd700 !important;
+  font-size: 1.2em;
+}
+
+/* Skill tree animations */
+.skill-unlocked {
+  animation: sparkle 2s ease-out;
+  background: linear-gradient(45deg, #10b981, #34d399);
+  border: 2px solid #34d399;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+}
+
+/* Progress bar enhancements */
+.xp-progress {
+  transition: width 1s ease-out;
+  position: relative;
+  background: linear-gradient(90deg, #8b5cf6, #06b6d4);
+}
+
+.xp-progress.gaining {
+  animation: xpBarFill 1s ease-out;
+}
+
+.xp-progress::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -10px;
+  width: 10px;
+  height: 100%;
+  background: inherit;
+  border-radius: 0 3px 3px 0;
+  opacity: 0.8;
+}
+
+/* Team collaboration effects */
+.team-collaboration-effect {
+  position: relative;
+}
+
+.team-collaboration-effect::before {
+  content: '🤝';
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: rgba(16, 185, 129, 0.9);
+  border-radius: 50%;
+  padding: 2px;
+  font-size: 12px;
+  animation: bounceIn 0.5s ease-out;
+}
+
+/* Quest completion celebration */
+.quest-completion {
+  position: relative;
+}
+
+.quest-completion::after {
+  content: '🎉';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2em;
+  animation: bounceIn 1s ease-out;
+  pointer-events: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .level-up-modal {
+    margin: 1rem;
+    max-width: calc(100vw - 2rem);
+  }
+  
+  .notification-toast {
+    margin: 0.5rem;
+    max-width: calc(100vw - 1rem);
+  }
+}

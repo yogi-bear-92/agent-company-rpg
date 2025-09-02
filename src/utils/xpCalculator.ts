@@ -1,7 +1,7 @@
 // XP calculation and level progression utilities for Agent Company RPG
 
 import { Agent, AgentStats } from '../types/agent';
-import { Quest, QuestObjective } from '../types/quest';
+import { Quest } from '../types/quest';
 
 // XP multipliers and constants
 const BASE_XP_TO_NEXT_LEVEL = 100;
@@ -130,7 +130,6 @@ export function calculateStreakBonus(agent: Agent): number {
 
 // Calculate XP from skill usage
 export function calculateSkillXp(
-  skillName: string,
   skillLevel: number,
   usageComplexity: 'simple' | 'moderate' | 'complex' = 'moderate'
 ): number {
