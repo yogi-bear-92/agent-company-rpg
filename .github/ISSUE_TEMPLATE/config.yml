@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 General Discussion
+    url: https://github.com/yogi-bear-92/agent-company-rpg/discussions
+    about: For general questions, ideas, and community discussions
+  - name: 📚 Documentation
+    url: https://github.com/yogi-bear-92/agent-company-rpg#readme
+    about: Check our documentation and README for answers to common questions
+  - name: 🔒 Private Security Report
+    url: https://github.com/yogi-bear-92/agent-company-rpg/security/advisories/new
+    about: Report security vulnerabilities privately through GitHub Security Advisories

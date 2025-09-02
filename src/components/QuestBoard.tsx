@@ -155,17 +155,27 @@ const QuestBoard: React.FC<QuestBoardProps> = ({ agents, onQuestAssign, onQuestS
   const renderQuestCard = (quest: Quest) => (
     <div
       key={quest.id}
-      className={`quest-card p-4 rounded-lg border-2 cursor-pointer transition-all hover:scale-105 ${getTypeColor(quest.type)} ${
+      data-quest-id={quest.id}
+      className={`quest-card p-4 rounded-lg border-2 cursor-pointer transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-800 ${getTypeColor(quest.type)} ${
         selectedQuest?.id === quest.id ? 'ring-2 ring-blue-400' : ''
       }`}
       onClick={() => {
         setSelectedQuest(quest);
         setShowDetails(true);
       }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setSelectedQuest(quest);
+          setShowDetails(true);
+        }
+      }}
+      tabIndex={0}
+      aria-label={`View details for ${quest.title} quest`}
     >
       <div className="flex justify-between items-start mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">{quest.icon}</span>
+          <span className="text-2xl" role="img" aria-label={`${quest.title} quest icon`}>{quest.icon}</span>
           <div>
             <h3 className="font-bold text-white">{quest.title}</h3>
             <div className="flex gap-2 text-xs">
@@ -178,7 +188,7 @@ const QuestBoard: React.FC<QuestBoardProps> = ({ agents, onQuestAssign, onQuestS
             </div>
           </div>
         </div>
-        <span className="text-lg">{getStatusIcon(quest.status)}</span>
+        <span className="text-lg" role="img" aria-label={`Quest status: ${quest.status}`}>{getStatusIcon(quest.status)}</span>
       </div>
       
       <p className="text-sm text-gray-300 mb-2 line-clamp-2">{quest.description}</p>
@@ -198,15 +208,39 @@ const QuestBoard: React.FC<QuestBoardProps> = ({ agents, onQuestAssign, onQuestS
       
       {quest.status === 'active' && (
         <div className="mt-2">
-          <div className="w-full bg-black/30 rounded-full h-2">
+          <div 
+            className="w-full bg-black/30 rounded-full h-2" 
+            role="progressbar" 
+            aria-valuenow={quest.progressPercentage} 
+            aria-valuemin={0} 
+            aria-valuemax={100} 
+            aria-label={`Quest progress: ${quest.progressPercentage}%`}
+          >
             <div 
               className="h-2 bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all"
+              role="progressbar"
+              aria-valuenow={quest.progressPercentage}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${quest.title} progress`}
               style={{ width: `${quest.progressPercentage}%` }}
             />
           </div>
           <div className="text-xs text-center mt-1 text-gray-300">
             {quest.progressPercentage}% Complete
           </div>
+          {quest.progressPercentage >= 100 && (
+            <button
+              className="w-full mt-2 px-2 py-1 bg-green-600 hover:bg-green-700 rounded text-xs transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuestComplete(quest.id);
+              }}
+              data-action="complete"
+            >
+              Complete Quest
+            </button>
+          )}
         </div>
       )}
       
@@ -412,7 +446,7 @@ const QuestBoard: React.FC<QuestBoardProps> = ({ agents, onQuestAssign, onQuestS
                       onClick={() => handleAgentToggle(agent.id)}
                     >
                       <div className="flex items-center gap-2">
-                        <img src={agent.avatar} alt={agent.name} className="w-8 h-8 rounded-full" />
+                        <span className="text-2xl" role="img" aria-label={`${agent.name} avatar`}>{agent.avatar}</span>
                         <div className="text-left">
                           <div className="text-xs font-bold text-white">{agent.name}</div>
                           <div className="text-xs text-gray-400">Lv.{agent.level} {agent.class}</div>

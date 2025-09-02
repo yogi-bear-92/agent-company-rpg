@@ -1,0 +1,16 @@
+
+> agent-rpg-project@1.0.0 build
+> tsc -b && vite build
+
+vite v7.1.4 building for production...
+transforming...
+✓ 39 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                         0.87 kB │ gzip:  0.45 kB
+dist/assets/index-CHmR33ME.css         58.73 kB │ gzip:  9.62 kB
+dist/assets/utils-Bub4qm0q.js           6.17 kB │ gzip:  2.50 kB │ map:  30.71 kB
+dist/assets/react-vendor-HnKmhvXM.js   11.23 kB │ gzip:  4.01 kB │ map:  42.71 kB
+dist/assets/components-Dq2CPLEW.js     38.16 kB │ gzip:  9.81 kB │ map:  95.84 kB
+dist/assets/index-BMiu5FOg.js         193.84 kB │ gzip: 61.65 kB │ map: 886.68 kB
+✓ built in 1.65s

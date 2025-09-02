@@ -1,0 +1,64 @@
+{
+  "language-settings": {
+    "javascript": {
+      "vulnOptions": {
+        "severity-threshold": "high",
+        "dev": false,
+        "fail-on": "all"
+      }
+    }
+  },
+  "ignore": {
+    "CVE-2023-placeholder": {
+      "reason": "Not applicable to our use case",
+      "expires": "2025-12-31T23:59:59.999Z"
+    }
+  },
+  "exclude": {
+    "global": [
+      "**/node_modules/**",
+      "**/dist/**", 
+      "**/build/**",
+      "**/coverage/**",
+      "**/*.test.js",
+      "**/*.spec.js",
+      "**/*.test.ts",
+      "**/*.spec.ts"
+    ]
+  },
+  "patch": {
+    "auto": true,
+    "minimal": true,
+    "updates": {
+      "semver": "major"
+    }
+  },
+  "monitor": {
+    "project-tags": {
+      "environment": "production",
+      "component": "frontend",
+      "criticality": "high"
+    }
+  },
+  "sarif": {
+    "enabled": true,
+    "filename": "snyk.sarif",
+    "upload": true
+  },
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "pr-checks": true,
+      "security-tab": true
+    }
+  },
+  "reporting": {
+    "formats": ["json", "sarif", "html"],
+    "output-dir": "security-reports"
+  },
+  "thresholds": {
+    "high": 0,
+    "medium": 5,
+    "low": 10
+  }
+}

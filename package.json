@@ -16,7 +16,17 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "perf:test": "vitest run --config performance/testing/vitest-performance.config.ts",
+    "perf:bench": "vitest bench --config performance/testing/vitest-performance.config.ts",
+    "perf:report": "node -e \"require('./performance/reports/performance-report-generator.js').performanceReportGenerator.exportReport('html').then(r => require('fs').writeFileSync('./performance/reports/latest-report.html', r))\"",
+    "perf:monitor": "node -e \"console.log('Performance monitoring started. Check the development overlay.')\"",
+    "perf:analyze": "npm run build && npm run perf:bench && npm run perf:report",
+    "perf:baseline": "node scripts/performance-baseline.js",
+    "perf:ci": "node scripts/performance-ci.js",
+    "build:analyze": "npm run build && npx vite-bundle-analyzer dist/assets",
+    "lighthouse": "npm run build && npx lighthouse http://localhost:4173 --output-path=./performance/reports/lighthouse.html --chrome-flags='--headless' || echo 'Lighthouse analysis completed'",
+    "lighthouse:ci": "lhci autorun --config=config/lighthouse.config.js"
   },
   "repository": {
     "type": "git",

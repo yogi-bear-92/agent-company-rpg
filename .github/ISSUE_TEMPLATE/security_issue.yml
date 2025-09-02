@@ -1,0 +1,125 @@
+name: 🔒 Security Issue
+description: Report a security vulnerability (DO NOT include sensitive details)
+title: "[SECURITY] "
+labels: ["type:security", "priority:critical", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **⚠️ SECURITY NOTICE ⚠️**
+        
+        If this is a severe security vulnerability, please consider reporting it privately through:
+        - GitHub Security Advisories
+        - Direct contact with maintainers
+        
+        Do NOT include sensitive information like actual exploit code, credentials, or specific vulnerable endpoints in this public issue.
+
+  - type: textarea
+    id: security-description
+    attributes:
+      label: Security Issue Summary
+      description: A brief, general description of the security concern (avoid sensitive details)
+      placeholder: General description of the security issue type...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity Level
+      description: How severe is this security issue?
+      options:
+        - Low - Minor security concern, minimal risk
+        - Medium - Moderate security risk, limited impact
+        - High - Significant security risk, substantial impact
+        - Critical - Severe security vulnerability, immediate risk
+      default: 3
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Security Category
+      description: What type of security issue is this?
+      options:
+        - Authentication - Login/access control issues
+        - Authorization - Permission/privilege escalation
+        - Data Protection - Information disclosure/privacy
+        - Injection - SQL/XSS/Code injection vulnerabilities
+        - Cryptographic - Encryption/hashing weaknesses
+        - Network Security - Communication security issues
+        - Infrastructure - Server/deployment security
+        - Dependencies - Third-party library vulnerabilities
+        - Configuration - Insecure default settings
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      description: Which component is affected by this security issue?
+      options:
+        - Frontend - React UI and client-side code
+        - Backend - Server APIs and business logic  
+        - Database - Data storage and queries
+        - Agent System - AI agent communication
+        - Authentication - Login and user management
+        - Token System - Cryptocurrency/reward handling
+        - Infrastructure - DevOps and deployment
+        - Dependencies - Third-party packages
+        - Configuration - Environment and settings
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact-assessment
+    attributes:
+      label: Impact Assessment
+      description: What could happen if this vulnerability is exploited? (Keep general, no specific attack scenarios)
+      placeholder: Potential impact of this security issue...
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-versions
+    attributes:
+      label: Affected Versions
+      description: Which versions of the project are affected?
+      placeholder: e.g., All versions, v1.0.0 and above, etc.
+
+  - type: textarea
+    id: mitigation-suggestions
+    attributes:
+      label: Suggested Mitigation
+      description: Any suggestions for how this issue could be addressed? (General approach only)
+      placeholder: Suggested approach to fix this issue...
+
+  - type: checkboxes
+    id: disclosure-agreement
+    attributes:
+      label: Responsible Disclosure Agreement
+      description: Please confirm your understanding of responsible disclosure
+      options:
+        - label: I understand this is a public issue and will not include sensitive exploit details
+          required: true
+        - label: I have not publicly disclosed this vulnerability elsewhere
+          required: true
+        - label: I will allow reasonable time for the issue to be addressed before public disclosure
+          required: true
+        - label: I am willing to work with maintainers privately on sensitive details if needed
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        **Next Steps:**
+        1. A maintainer will review this issue and may contact you privately for additional details
+        2. If confirmed as a security vulnerability, we will work on a fix
+        3. A security advisory will be published once the issue is resolved
+        4. Credit will be given for responsible disclosure (if desired)
+        
+        Thank you for helping keep the Agent RPG Project secure!

@@ -1,0 +1,166 @@
+{
+  "timestamp": "2025-09-02T23:04:36.000Z",
+  "baseline": {
+    "bundleSize": {
+      "js": 252,
+      "css": 60,
+      "total": 312
+    },
+    "benchmarks": {
+      "xpCalculation": "< 1ms",
+      "batchCalculation": "< 10ms per 100 items",
+      "agentFiltering": "< 5ms per 1000 items",
+      "timestamp": "2025-09-02T23:04:36.000Z"
+    },
+    "lighthouse": {
+      "performance": 85,
+      "accessibility": 90,
+      "bestPractices": 85,
+      "seo": 95,
+      "timestamp": "2025-09-02T23:04:36.000Z"
+    },
+    "runtime": {
+      "initialRender": "< 50ms",
+      "componentRender": "< 16ms",
+      "memoryUsage": "< 50MB",
+      "timestamp": "2025-09-02T23:04:36.000Z"
+    }
+  },
+  "current": {
+    "bundleSize": {
+      "js": 252,
+      "css": 60,
+      "total": 312
+    },
+    "benchmarks": {
+      "xpCalculation": "< 1ms",
+      "batchCalculation": "< 10ms per 100 items",
+      "agentFiltering": "< 5ms per 1000 items",
+      "timestamp": "2025-09-02T23:04:36.000Z"
+    },
+    "lighthouse": {
+      "performance": 85,
+      "accessibility": 90,
+      "bestPractices": 85,
+      "seo": 95,
+      "timestamp": "2025-09-02T23:04:36.000Z"
+    },
+    "runtime": {
+      "initialRender": "< 50ms",
+      "componentRender": "< 16ms",
+      "memoryUsage": "< 50MB",
+      "timestamp": "2025-09-02T23:04:36.000Z"
+    }
+  },
+  "comparison": {
+    "bundleSize": {
+      "js": {
+        "value": 252,
+        "target": 250,
+        "status": "warning"
+      },
+      "css": {
+        "value": 60,
+        "target": 50,
+        "status": "warning"
+      },
+      "total": {
+        "value": 312,
+        "target": 300
+      }
+    },
+    "webVitals": {
+      "status": "baseline-established",
+      "targets": {
+        "FCP": {
+          "good": 1800,
+          "needsImprovement": 3000,
+          "target": 1500
+        },
+        "LCP": {
+          "good": 2500,
+          "needsImprovement": 4000,
+          "target": 2000
+        },
+        "FID": {
+          "good": 100,
+          "needsImprovement": 300,
+          "target": 80
+        },
+        "CLS": {
+          "good": 0.1,
+          "needsImprovement": 0.25,
+          "target": 0.05
+        },
+        "TTFB": {
+          "good": 800,
+          "needsImprovement": 1800,
+          "target": 600
+        },
+        "INP": {
+          "good": 200,
+          "needsImprovement": 500,
+          "target": 150
+        }
+      }
+    },
+    "lighthouse": {
+      "performance": {
+        "current": 85,
+        "target": 85,
+        "status": "good"
+      },
+      "accessibility": {
+        "current": 90,
+        "target": 90
+      }
+    },
+    "overall": 85
+  },
+  "recommendations": [
+    {
+      "priority": "medium",
+      "category": "Bundle Size",
+      "title": "Optimize JavaScript bundle",
+      "description": "JS bundle is 252KB (target: 250KB)",
+      "actions": [
+        "Implement code splitting",
+        "Remove unused dependencies",
+        "Enable tree shaking"
+      ]
+    },
+    {
+      "priority": "medium",
+      "category": "Bundle Size",
+      "title": "Optimize CSS bundle", 
+      "description": "CSS bundle is 60KB (target: 50KB)",
+      "actions": [
+        "Purge unused CSS",
+        "Optimize Tailwind configuration",
+        "Use CSS modules"
+      ]
+    },
+    {
+      "priority": "medium",
+      "category": "Optimization",
+      "title": "Implement lazy loading",
+      "description": "Use React.lazy() for non-critical components",
+      "actions": [
+        "Identify large components",
+        "Implement route-based splitting",
+        "Add loading states"
+      ]
+    },
+    {
+      "priority": "low",
+      "category": "Monitoring",
+      "title": "Set up performance regression detection",
+      "description": "Implement continuous performance monitoring",
+      "actions": [
+        "Configure CI performance checks",
+        "Set up alerts",
+        "Track metrics over time"
+      ]
+    }
+  ]
+}

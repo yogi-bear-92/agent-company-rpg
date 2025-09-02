@@ -1,0 +1,62 @@
+{
+  "allowed_licenses": [
+    "MIT",
+    "Apache-2.0", 
+    "BSD",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "0BSD",
+    "Apache-1.1",
+    "CC0-1.0",
+    "Unlicense",
+    "WTFPL",
+    "Python-2.0",
+    "BlueOak-1.0.0",
+    "Zlib",
+    "X11"
+  ],
+  "restricted_licenses": [
+    "GPL",
+    "LGPL", 
+    "AGPL",
+    "SSPL",
+    "Commons Clause",
+    "Copyleft"
+  ],
+  "review_required": [
+    "GPL-2.0",
+    "GPL-3.0",
+    "LGPL-2.1", 
+    "LGPL-3.0",
+    "AGPL-3.0",
+    "MPL-2.0"
+  ],
+  "exemptions": {
+    "devDependencies": true,
+    "testPackages": [
+      "@testing-library/*",
+      "vitest",
+      "jest",
+      "cypress",
+      "playwright"
+    ]
+  },
+  "compliance": {
+    "level": "strict",
+    "fail_on_restricted": false,
+    "require_attribution": true,
+    "generate_notice": true
+  },
+  "reporting": {
+    "format": ["json", "csv", "html"],
+    "include_dev_dependencies": false,
+    "group_by_license": true,
+    "output_directory": "license-reports"
+  },
+  "validation": {
+    "check_package_lock": true,
+    "verify_license_files": true,
+    "validate_spdx": true
+  }
+}

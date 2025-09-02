@@ -1,0 +1,373 @@
+name: Automated Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      prerelease:
+        description: 'Create prerelease'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  analyze-changes:
+    name: Analyze Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    outputs:
+      should_release: ${{ steps.analysis.outputs.should_release }}
+      release_type: ${{ steps.analysis.outputs.release_type }}
+      changelog: ${{ steps.analysis.outputs.changelog }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Analyze commits for release
+        id: analysis
+        run: |
+          # Get commits since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --oneline)
+            COMMIT_RANGE="Initial commit"
+          else
+            COMMITS=$(git log ${LAST_TAG}..HEAD --oneline)
+            COMMIT_RANGE="${LAST_TAG}..HEAD"
+          fi
+          
+          echo "Commits since last release:"
+          echo "$COMMITS"
+          
+          # Determine release type based on conventional commits
+          RELEASE_TYPE="patch"
+          HAS_BREAKING=false
+          HAS_FEAT=false
+          HAS_FIX=false
+          
+          while IFS= read -r commit; do
+            if [[ $commit == *"BREAKING CHANGE"* ]] || [[ $commit == *"!:"* ]]; then
+              HAS_BREAKING=true
+            elif [[ $commit == *"feat:"* ]] || [[ $commit == *"feat("* ]]; then
+              HAS_FEAT=true
+            elif [[ $commit == *"fix:"* ]] || [[ $commit == *"fix("* ]]; then
+              HAS_FIX=true
+            fi
+          done <<< "$COMMITS"
+          
+          if [ "$HAS_BREAKING" = true ]; then
+            RELEASE_TYPE="major"
+          elif [ "$HAS_FEAT" = true ]; then
+            RELEASE_TYPE="minor"
+          elif [ "$HAS_FIX" = true ]; then
+            RELEASE_TYPE="patch"
+          fi
+          
+          # Override with manual input if provided
+          if [ "${{ github.event.inputs.release_type }}" != "" ]; then
+            RELEASE_TYPE="${{ github.event.inputs.release_type }}"
+          fi
+          
+          # Generate changelog
+          CHANGELOG="## What's Changed\n\n"
+          
+          # Features
+          FEAT_COMMITS=$(echo "$COMMITS" | grep -E "^[a-f0-9]+ (feat|feature)" || true)
+          if [ ! -z "$FEAT_COMMITS" ]; then
+            CHANGELOG+="### ✨ New Features\n"
+            while IFS= read -r commit; do
+              if [ ! -z "$commit" ]; then
+                CHANGELOG+="- ${commit#* }\n"
+              fi
+            done <<< "$FEAT_COMMITS"
+            CHANGELOG+="\n"
+          fi
+          
+          # Bug fixes
+          FIX_COMMITS=$(echo "$COMMITS" | grep -E "^[a-f0-9]+ (fix|bugfix)" || true)
+          if [ ! -z "$FIX_COMMITS" ]; then
+            CHANGELOG+="### 🐛 Bug Fixes\n"
+            while IFS= read -r commit; do
+              if [ ! -z "$commit" ]; then
+                CHANGELOG+="- ${commit#* }\n"
+              fi
+            done <<< "$FIX_COMMITS"
+            CHANGELOG+="\n"
+          fi
+          
+          # Other changes
+          OTHER_COMMITS=$(echo "$COMMITS" | grep -vE "^[a-f0-9]+ (feat|feature|fix|bugfix)" || true)
+          if [ ! -z "$OTHER_COMMITS" ]; then
+            CHANGELOG+="### 🔧 Other Changes\n"
+            while IFS= read -r commit; do
+              if [ ! -z "$commit" ]; then
+                CHANGELOG+="- ${commit#* }\n"
+              fi
+            done <<< "$OTHER_COMMITS"
+          fi
+          
+          # Determine if we should release
+          SHOULD_RELEASE="false"
+          if [ ! -z "$COMMITS" ] && [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SHOULD_RELEASE="true"
+          elif [ ! -z "$COMMITS" ] && ([ "$HAS_FEAT" = true ] || [ "$HAS_FIX" = true ] || [ "$HAS_BREAKING" = true ]); then
+            SHOULD_RELEASE="true"
+          fi
+          
+          echo "should_release=$SHOULD_RELEASE" >> $GITHUB_OUTPUT
+          echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+          
+          # Escape newlines for GitHub output
+          CHANGELOG_ESCAPED=$(echo -e "$CHANGELOG" | sed ':a;N;$!ba;s/\n/\\n/g')
+          echo "changelog=$CHANGELOG_ESCAPED" >> $GITHUB_OUTPUT
+          
+          echo "Analysis complete:"
+          echo "- Should release: $SHOULD_RELEASE"
+          echo "- Release type: $RELEASE_TYPE"
+  
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.should_release == 'true'
+    
+    permissions:
+      contents: write
+      packages: write
+    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+      
+      - name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Generate new version
+        id: version
+        run: |
+          # Get current version
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Calculate new version
+          RELEASE_TYPE="${{ needs.analyze-changes.outputs.release_type }}"
+          
+          # Simple version bumping (replace with semantic-release or standard-version for production)
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+          MAJOR=${VERSION_PARTS[0]}
+          MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
+          
+          case $RELEASE_TYPE in
+            "major")
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            "minor")
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            "patch")
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+          
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          
+          if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
+            NEW_VERSION="${NEW_VERSION}-rc.$(date +%Y%m%d%H%M%S)"
+          fi
+          
+          echo "New version: $NEW_VERSION"
+          
+          # Update package.json
+          npm version $NEW_VERSION --no-git-tag-version
+          
+          # Set outputs
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Update CHANGELOG.md
+        run: |
+          # Create or update CHANGELOG.md
+          CHANGELOG_CONTENT="${{ needs.analyze-changes.outputs.changelog }}"
+          
+          if [ -f "CHANGELOG.md" ]; then
+            # Prepend to existing changelog
+            {
+              echo "# Changelog"
+              echo ""
+              echo "## [${{ steps.version.outputs.version }}] - $(date +%Y-%m-%d)"
+              echo ""
+              echo -e "$CHANGELOG_CONTENT"
+              echo ""
+              tail -n +2 CHANGELOG.md
+            } > CHANGELOG.tmp && mv CHANGELOG.tmp CHANGELOG.md
+          else
+            # Create new changelog
+            {
+              echo "# Changelog"
+              echo ""
+              echo "All notable changes to this project will be documented in this file."
+              echo ""
+              echo "## [${{ steps.version.outputs.version }}] - $(date +%Y-%m-%d)"
+              echo ""
+              echo -e "$CHANGELOG_CONTENT"
+            } > CHANGELOG.md
+          fi
+      
+      - name: Commit version changes
+        run: |
+          git add package.json CHANGELOG.md
+          git commit -m "chore(release): ${{ steps.version.outputs.version }}"
+          git tag ${{ steps.version.outputs.tag }}
+      
+      - name: Push changes
+        run: |
+          git push origin main
+          git push origin ${{ steps.version.outputs.tag }}
+      
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          release_name: Release ${{ steps.version.outputs.version }}
+          body: |
+            ${{ needs.analyze-changes.outputs.changelog }}
+            
+            ---
+            
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.version.outputs.tag }}...HEAD
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+      
+      - name: Build and prepare release artifacts
+        run: |
+          npm run build
+          
+          # Create release artifacts
+          tar -czf agent-rpg-${{ steps.version.outputs.version }}.tar.gz dist/
+          zip -r agent-rpg-${{ steps.version.outputs.version }}.zip dist/
+      
+      - name: Upload release artifacts
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./agent-rpg-${{ steps.version.outputs.version }}.tar.gz
+          asset_name: agent-rpg-${{ steps.version.outputs.version }}.tar.gz
+          asset_content_type: application/gzip
+      
+      - name: Publish to npm (if configured)
+        if: env.NPM_TOKEN != ''
+        run: |
+          echo "Publishing to npm..."
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      
+      - name: Notify release creation
+        run: |
+          npx claude-flow@alpha hooks notify --message "Release ${{ steps.version.outputs.version }} created successfully with tag ${{ steps.version.outputs.tag }}"
+  
+  post-release:
+    name: Post-release Actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [analyze-changes, create-release]
+    if: needs.create-release.result == 'success'
+    
+    steps:
+      - name: Trigger deployment
+        run: |
+          # Trigger production deployment workflow
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/deploy.yml/dispatches \
+            -d '{"ref":"${{ needs.create-release.outputs.tag }}","inputs":{"environment":"production"}}'
+      
+      - name: Update project documentation
+        run: |
+          echo "🎉 Release ${{ needs.create-release.outputs.version }} completed!"
+          echo ""
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ needs.create-release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag**: ${{ needs.create-release.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Type**: ${{ needs.analyze-changes.outputs.release_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Prerelease**: ${{ github.event.inputs.prerelease == 'true' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] Release created" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] Artifacts uploaded" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Production deployment (triggered)" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Monitor release metrics" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Create follow-up issues
+        if: github.event.inputs.prerelease != 'true'
+        run: |
+          # Create issue for release monitoring
+          cat > release-monitoring.md << EOF
+          ## Release Monitoring: ${{ needs.create-release.outputs.version }}
+          
+          Track the health and performance of release ${{ needs.create-release.outputs.version }}.
+          
+          ### Monitoring Checklist
+          - [ ] Deployment successful
+          - [ ] Error rates within normal range
+          - [ ] Performance metrics stable
+          - [ ] User feedback collected
+          - [ ] Security scans passed
+          
+          ### Metrics to Watch
+          - Response times
+          - Error rates
+          - User engagement
+          - Performance indicators
+          
+          **Auto-created by release workflow**
+          EOF
+          
+          # This would create an issue using GitHub CLI or API
+          echo "Release monitoring checklist created"

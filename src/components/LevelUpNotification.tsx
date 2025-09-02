@@ -151,13 +151,13 @@ export const LevelUpNotification: React.FC<LevelUpNotificationProps> = ({
               Level Up!
             </h2>
             <p className="text-slate-300 text-sm mt-1">
-              {agent.name} has reached level {levelUpEvent.newLevel}
+              {agent?.name || 'Agent'} has reached level {levelUpEvent.newLevel}
             </p>
           </div>
 
           {/* Agent info */}
           <div className="flex items-center justify-center space-x-4 mb-4">
-            <div className="text-3xl">{agent.avatar}</div>
+            <div className="text-3xl">{agent?.avatar || '🎯'}</div>
             <div className="text-center">
               <div className="flex items-center space-x-2">
                 <span className="text-2xl font-bold text-orange-400">

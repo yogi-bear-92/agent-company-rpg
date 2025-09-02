@@ -1,0 +1,66 @@
+# CodeQL Configuration for Agent RPG Project
+# Optimized for TypeScript/JavaScript security analysis
+
+name: "Agent RPG Security Analysis"
+
+# Disable default queries to use custom security-focused ones
+disable-default-queries: false
+
+# Query suite configuration
+queries:
+  - name: security-extended
+    uses: security-extended
+  - name: security-and-quality  
+    uses: security-and-quality
+
+# Language-specific configuration
+languages:
+  javascript:
+    - typescript
+    - jsx
+    - tsx
+
+# Analysis scope
+paths:
+  - "src/**"
+  - "*.ts"
+  - "*.tsx" 
+  - "*.js"
+  - "*.jsx"
+
+# Exclude paths from analysis
+paths-ignore:
+  - "node_modules/**"
+  - "dist/**"
+  - "build/**"
+  - "*.min.js"
+  - "coverage/**"
+  - "docs/**"
+  - ".git/**"
+  - "*.md"
+  - "tests/fixtures/**"
+  - "**/*.test.ts"
+  - "**/*.spec.ts"
+  - "**/*.stories.ts"
+
+# Database configuration for analysis
+database:
+  finalize-dataset: true
+  run-queries: true
+
+# Security-specific query packs
+packs:
+  - security-queries
+  - react-security
+  - typescript-security
+
+# Custom analysis configuration
+analysis:
+  threads: 0  # Use all available cores
+  ram: 0      # Use available RAM
+  timeout: 1200  # 20 minutes
+  
+# Sarif configuration
+sarif:
+  add-snippets: true
+  category: "security-analysis"

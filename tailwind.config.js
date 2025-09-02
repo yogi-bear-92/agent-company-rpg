@@ -17,6 +17,10 @@ export default {
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'bounce-slow': 'bounce 2s infinite',
+      },
+      backgroundImage: {
+        'gradient-main': 'linear-gradient(to bottom right, rgb(15 23 42), rgb(88 28 135), rgb(15 23 42))',
+        'gradient-xp': 'linear-gradient(to right, rgb(168 85 247), rgb(6 182 212))',
       }
     },
   },
