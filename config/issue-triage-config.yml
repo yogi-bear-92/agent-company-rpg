@@ -1,0 +1,219 @@
+# Agent Company RPG - GitHub Issue Triage Configuration
+# Intelligent issue classification and auto-labeling for DAA integration project
+
+repository:
+  owner: "your-github-username"  # Replace with your GitHub username
+  name: "agent-company-rpg"
+  
+triage:
+  auto_label: true
+  auto_assign: true
+  priority_detection: true
+  
+labels:
+  # Feature Areas
+  - name: "feature:rpg-mechanics"
+    description: "RPG gameplay and mechanics"
+    color: "7057ff"
+    keywords: ["rpg", "game", "quest", "level", "xp", "character"]
+    
+  - name: "feature:knowledge-system"
+    description: "Knowledge base and learning integration"
+    color: "0e8a16"
+    keywords: ["knowledge", "learning", "crawl", "embedding", "vector", "supabase"]
+    
+  - name: "feature:daa-integration"
+    description: "DAA autonomous agent features"
+    color: "d73a4a"
+    keywords: ["daa", "autonomous", "mrara", "rust", "decentralized"]
+    
+  - name: "feature:token-economy"
+    description: "Token rewards and economics"
+    color: "fbca04"
+    keywords: ["token", "ruv", "economy", "reward", "nft", "yield"]
+    
+  - name: "feature:ml-training"
+    description: "Distributed ML and Prime framework"
+    color: "006b75"
+    keywords: ["ml", "prime", "training", "federated", "gradient"]
+    
+  # Priority Levels
+  - name: "priority:critical"
+    description: "Critical issue blocking development"
+    color: "d73a4a"
+    keywords: ["critical", "blocker", "urgent", "breaking"]
+    
+  - name: "priority:high"
+    description: "High priority feature or fix"
+    color: "e99695"
+    keywords: ["important", "high priority", "asap"]
+    
+  - name: "priority:medium"
+    description: "Medium priority enhancement"
+    color: "fbca04"
+    keywords: ["enhancement", "improvement", "feature request"]
+    
+  - name: "priority:low"
+    description: "Nice to have features"
+    color: "0e8a16"
+    keywords: ["nice to have", "future", "someday"]
+    
+  # Issue Types
+  - name: "type:bug"
+    description: "Something isn't working"
+    color: "d73a4a"
+    keywords: ["bug", "error", "broken", "fix", "issue"]
+    
+  - name: "type:enhancement"
+    description: "New feature or request"
+    color: "a2eeef"
+    keywords: ["enhancement", "feature", "request", "add", "implement"]
+    
+  - name: "type:documentation"
+    description: "Documentation improvements"
+    color: "0075ca"
+    keywords: ["docs", "documentation", "readme", "guide", "tutorial"]
+    
+  - name: "type:performance"
+    description: "Performance optimization"
+    color: "ffd700"
+    keywords: ["performance", "optimization", "speed", "slow", "memory"]
+    
+  - name: "type:security"
+    description: "Security vulnerability or concern"
+    color: "ee0701"
+    keywords: ["security", "vulnerability", "quantum", "encryption", "auth"]
+    
+  # Component Labels
+  - name: "component:frontend"
+    description: "React UI components"
+    color: "bfd4f2"
+    keywords: ["ui", "frontend", "react", "component", "dashboard"]
+    
+  - name: "component:backend"
+    description: "Backend services and APIs"
+    color: "5319e7"
+    keywords: ["backend", "api", "server", "database", "service"]
+    
+  - name: "component:smart-contracts"
+    description: "Blockchain and smart contracts"
+    color: "1d76db"
+    keywords: ["contract", "blockchain", "solidity", "web3"]
+    
+  - name: "component:infrastructure"
+    description: "Infrastructure and DevOps"
+    color: "c5def5"
+    keywords: ["docker", "kubernetes", "deploy", "ci/cd", "infrastructure"]
+
+assignment_rules:
+  # Auto-assign based on expertise areas
+  - label: "feature:rpg-mechanics"
+    assignees: ["game-dev-team"]
+    
+  - label: "feature:daa-integration"
+    assignees: ["rust-team", "blockchain-team"]
+    
+  - label: "feature:knowledge-system"
+    assignees: ["ml-team", "data-team"]
+    
+  - label: "type:security"
+    assignees: ["security-team"]
+    
+  - label: "priority:critical"
+    assignees: ["lead-dev", "project-manager"]
+
+automation:
+  # Automatic actions based on labels
+  stale_issues:
+    days_until_stale: 30
+    days_until_close: 7
+    exempt_labels: ["priority:critical", "in-progress"]
+    stale_label: "stale"
+    
+  auto_close:
+    - label: "wontfix"
+      close_after_days: 3
+      comment: "This issue has been marked as wontfix and will be closed."
+      
+  project_board:
+    enabled: true
+    columns:
+      - name: "Triage"
+        labels: ["needs-triage"]
+      - name: "Backlog"
+        labels: ["priority:low", "priority:medium"]
+      - name: "Sprint"
+        labels: ["priority:high", "priority:critical"]
+      - name: "In Progress"
+        labels: ["in-progress"]
+      - name: "Review"
+        labels: ["needs-review"]
+      - name: "Done"
+        labels: ["completed"]
+
+templates:
+  bug_report:
+    title: "[BUG] "
+    labels: ["type:bug", "needs-triage"]
+    body: |
+      ## Description
+      Brief description of the bug
+      
+      ## Steps to Reproduce
+      1. 
+      2. 
+      3. 
+      
+      ## Expected Behavior
+      
+      ## Actual Behavior
+      
+      ## Environment
+      - OS: 
+      - Node version: 
+      - Browser: 
+      
+  feature_request:
+    title: "[FEATURE] "
+    labels: ["type:enhancement", "needs-triage"]
+    body: |
+      ## Feature Description
+      
+      ## Use Case
+      
+      ## Proposed Solution
+      
+      ## Alternative Solutions
+      
+  daa_integration:
+    title: "[DAA] "
+    labels: ["feature:daa-integration", "needs-triage"]
+    body: |
+      ## DAA Component
+      - [ ] Orchestrator
+      - [ ] MRARA Loop
+      - [ ] Token Economy
+      - [ ] P2P Network
+      
+      ## Description
+      
+      ## Implementation Plan
+      
+      ## Success Criteria
+
+milestones:
+  - title: "Phase 1: Foundation"
+    description: "Core RPG mechanics and knowledge system"
+    due_date: "2025-02-01"
+    
+  - title: "Phase 2: Archon Integration"
+    description: "Distributed knowledge and crawling"
+    due_date: "2025-02-15"
+    
+  - title: "Phase 3: DAA Implementation"
+    description: "Autonomous agents and token economy"
+    due_date: "2025-03-01"
+    
+  - title: "Phase 4: Launch"
+    description: "Production deployment and mainnet"
+    due_date: "2025-03-15"
