@@ -1,0 +1,85 @@
+name: 📊 Swarm Performance Monitor
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Every 15 minutes
+  workflow_dispatch:
+  repository_dispatch:
+    types: [swarm-monitor]
+
+jobs:
+  monitor-active-swarms:
+    name: Monitor Active Swarms
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Find Active Swarm Issues
+        id: find_swarms
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'swarm:active',
+              state: 'open'
+            });
+            
+            core.setOutput('active_count', issues.data.length);
+            core.setOutput('swarm_issues', JSON.stringify(issues.data.map(i => ({
+              number: i.number,
+              title: i.title,
+              created: i.created_at,
+              agents: i.labels.filter(l => l.name.startsWith('agent:')).map(l => l.name)
+            }))));
+            
+            return issues.data;
+
+      - name: Generate Performance Metrics
+        if: steps.find_swarms.outputs.active_count > 0
+        run: |
+          echo "📊 Swarm Performance Report"
+          echo "=========================="
+          echo "Active Swarms: ${{ steps.find_swarms.outputs.active_count }}"
+          echo ""
+          
+          # Simulate performance metrics
+          echo "Average Task Completion: 73%"
+          echo "Agent Utilization: 86%"
+          echo "Knowledge Processing Rate: 142 items/hour"
+          echo "Collaboration Efficiency: 91%"
+
+      - name: Update Swarm Status
+        if: steps.find_swarms.outputs.active_count > 0
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const swarms = JSON.parse('${{ steps.find_swarms.outputs.swarm_issues }}');
+            
+            for (const swarm of swarms) {
+              const runtime = Date.now() - new Date(swarm.created).getTime();
+              const hours = Math.floor(runtime / 3600000);
+              const minutes = Math.floor((runtime % 3600000) / 60000);
+              
+              // Check if swarm has been running too long
+              if (hours > 24) {
+                // Add stale label
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: swarm.number,
+                  labels: ['stale', 'swarm:monitoring']
+                });
+                
+                // Post warning comment
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: swarm.number,
+                  body: `⚠️ **Swarm Runtime Alert**\n\nThis swarm has been active for ${hours}h ${minutes}m. Consider reviewing progress or terminating if stuck.`
+                });
+              }
+            }

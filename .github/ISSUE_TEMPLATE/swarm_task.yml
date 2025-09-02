@@ -1,0 +1,148 @@
+name: 🤖 Swarm Task
+description: Create a task for AI agent swarm execution
+title: "[SWARM] "
+labels: ["swarm:task", "needs-triage", "auto-assign"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🚀 Swarm Task Configuration
+        This will automatically trigger a swarm of AI agents to work on this task.
+
+  - type: dropdown
+    id: swarm_type
+    attributes:
+      label: Swarm Type
+      description: Select the type of swarm coordination
+      options:
+        - Hierarchical (CodeMaster leads)
+        - Mesh (All agents collaborate)
+        - Specialized (Task-specific agents)
+        - Adaptive (Self-organizing)
+        - Research (Scout leads exploration)
+        - Development (CodeMaster + Sage)
+        - Creative (Bard leads content)
+        - Full Team (All 4 agents)
+    validations:
+      required: true
+
+  - type: textarea
+    id: task_description
+    attributes:
+      label: Task Description
+      description: Detailed description of what the swarm should accomplish
+      placeholder: |
+        Example: Research and implement a new feature for real-time knowledge sharing between agents.
+        Include any specific requirements, constraints, or goals.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: agents_required
+    attributes:
+      label: Required Agents
+      description: Select which agents should participate
+      options:
+        - label: "⚔️ CodeMaster Zyx (Code Warrior - Development)"
+        - label: "🧙‍♀️ Sage Analytica (Data Sage - Analysis)"
+        - label: "🎭 Bard Creative (Content Bard - Documentation)"
+        - label: "🏃‍♂️ Scout Rapid (Research Scout - Information Gathering)"
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority Level
+      description: Task urgency and importance
+      options:
+        - "🔴 Critical - Immediate swarm deployment"
+        - "🟠 High - Deploy within 4 hours"
+        - "🟡 Medium - Deploy within 24 hours"
+        - "🟢 Low - Schedule for next sprint"
+      default: "🟡 Medium - Deploy within 24 hours"
+    validations:
+      required: true
+
+  - type: textarea
+    id: subtasks
+    attributes:
+      label: Subtasks for Parallel Execution
+      description: Break down into subtasks that agents can work on simultaneously
+      placeholder: |
+        1. Research existing solutions (Scout)
+        2. Design architecture (CodeMaster)
+        3. Analyze data requirements (Sage)
+        4. Create documentation (Bard)
+      value: |
+        1. 
+        2. 
+        3. 
+        4. 
+
+  - type: textarea
+    id: knowledge_sources
+    attributes:
+      label: Knowledge Sources
+      description: Documentation, APIs, or resources the swarm should learn from
+      placeholder: |
+        - https://docs.example.com/api
+        - Internal knowledge base: /docs/architecture.md
+        - Research papers on topic X
+
+  - type: dropdown
+    id: completion_criteria
+    attributes:
+      label: Completion Criteria
+      description: How to determine when the swarm task is complete
+      options:
+        - All subtasks completed
+        - Code implementation + tests passing
+        - Documentation complete
+        - Research findings documented
+        - Feature fully implemented
+        - Custom (specify in comments)
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_outputs
+    attributes:
+      label: Expected Outputs
+      description: What deliverables should the swarm produce
+      placeholder: |
+        - Code implementation in /src/features/
+        - Documentation in /docs/
+        - Test cases in /tests/
+        - Research report
+        - Architecture diagram
+
+  - type: dropdown
+    id: coordination_mode
+    attributes:
+      label: Coordination Mode
+      description: How agents should coordinate
+      options:
+        - Synchronous (wait for each other)
+        - Asynchronous (work independently)
+        - Pipeline (sequential handoff)
+        - Consensus (group decisions)
+      default: Asynchronous (work independently)
+
+  - type: input
+    id: time_estimate
+    attributes:
+      label: Estimated Time
+      description: Expected completion time for the swarm
+      placeholder: "e.g., 2 hours, 1 day, 3 days"
+
+  - type: checkboxes
+    id: automation_triggers
+    attributes:
+      label: Automation Triggers
+      description: Additional automated actions to enable
+      options:
+        - label: "Auto-create PR when complete"
+        - label: "Run tests automatically"
+        - label: "Deploy to staging on success"
+        - label: "Notify team on completion"
+        - label: "Generate progress reports"
+        - label: "Enable real-time monitoring"

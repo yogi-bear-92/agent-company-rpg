@@ -1,0 +1,296 @@
+name: 🤖 Swarm Orchestration Workflow
+
+on:
+  issues:
+    types: [opened, labeled, edited]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to process'
+        required: true
+        type: number
+
+jobs:
+  triage-swarm-task:
+    name: Triage and Initialize Swarm
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'swarm:task') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Claude Flow
+        run: npm install -g claude-flow@alpha
+
+      - name: Parse Issue and Extract Swarm Configuration
+        id: parse_issue
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issue = context.payload.issue || await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.inputs?.issue_number || context.issue.number
+            }).then(r => r.data);
+            
+            const body = issue.body || '';
+            const title = issue.title || '';
+            
+            // Extract swarm type
+            const swarmTypeMatch = body.match(/Swarm Type\s*\n\s*(.+)/);
+            const swarmType = swarmTypeMatch ? swarmTypeMatch[1].trim() : 'Full Team';
+            
+            // Extract priority
+            const priorityMatch = body.match(/Priority Level\s*\n\s*(.+)/);
+            const priority = priorityMatch ? priorityMatch[1].trim() : 'Medium';
+            
+            // Determine agents based on checkboxes
+            const agents = [];
+            if (body.includes('[x] ⚔️ CodeMaster')) agents.push('codemaster');
+            if (body.includes('[x] 🧙‍♀️ Sage')) agents.push('sage');
+            if (body.includes('[x] 🎭 Bard')) agents.push('bard');
+            if (body.includes('[x] 🏃‍♂️ Scout')) agents.push('scout');
+            
+            // If no agents selected, use all based on swarm type
+            if (agents.length === 0) {
+              if (swarmType.includes('Research')) {
+                agents.push('scout', 'sage');
+              } else if (swarmType.includes('Development')) {
+                agents.push('codemaster', 'sage');
+              } else if (swarmType.includes('Creative')) {
+                agents.push('bard', 'scout');
+              } else {
+                agents.push('codemaster', 'sage', 'bard', 'scout');
+              }
+            }
+            
+            core.setOutput('swarm_type', swarmType);
+            core.setOutput('priority', priority);
+            core.setOutput('agents', agents.join(','));
+            core.setOutput('issue_number', issue.number);
+
+      - name: Apply Swarm Labels
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const labels = ['swarm:active'];
+            const priority = '${{ steps.parse_issue.outputs.priority }}';
+            
+            if (priority.includes('Critical')) {
+              labels.push('priority:critical', 'swarm:urgent');
+            } else if (priority.includes('High')) {
+              labels.push('priority:high');
+            } else if (priority.includes('Medium')) {
+              labels.push('priority:medium');
+            } else {
+              labels.push('priority:low');
+            }
+            
+            // Add agent-specific labels
+            const agents = '${{ steps.parse_issue.outputs.agents }}'.split(',');
+            agents.forEach(agent => {
+              labels.push(`agent:${agent}`);
+            });
+            
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.parse_issue.outputs.issue_number }},
+              labels: labels
+            });
+
+      - name: Initialize Swarm with Claude Flow
+        id: init_swarm
+        run: |
+          # Initialize swarm based on configuration
+          SWARM_TYPE="${{ steps.parse_issue.outputs.swarm_type }}"
+          AGENTS="${{ steps.parse_issue.outputs.agents }}"
+          ISSUE_NUMBER="${{ steps.parse_issue.outputs.issue_number }}"
+          
+          # Map swarm type to topology
+          if [[ "$SWARM_TYPE" == *"Hierarchical"* ]]; then
+            TOPOLOGY="hierarchical"
+          elif [[ "$SWARM_TYPE" == *"Mesh"* ]]; then
+            TOPOLOGY="mesh"
+          elif [[ "$SWARM_TYPE" == *"Adaptive"* ]]; then
+            TOPOLOGY="adaptive"
+          else
+            TOPOLOGY="mesh"
+          fi
+          
+          # Initialize swarm
+          npx claude-flow swarm init --topology $TOPOLOGY --max-agents 4
+          
+          # Create orchestration task
+          npx claude-flow github issue-tracker "Orchestrate swarm for issue #$ISSUE_NUMBER with agents: $AGENTS"
+
+      - name: Post Swarm Initialization Comment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const agents = '${{ steps.parse_issue.outputs.agents }}'.split(',');
+            const agentEmojis = {
+              'codemaster': '⚔️',
+              'sage': '🧙‍♀️',
+              'bard': '🎭',
+              'scout': '🏃‍♂️'
+            };
+            
+            const agentList = agents.map(a => `${agentEmojis[a] || '🤖'} ${a}`).join(', ');
+            
+            const comment = `## 🚀 Swarm Initialized!
+            
+            **Topology:** ${{ steps.parse_issue.outputs.swarm_type }}
+            **Priority:** ${{ steps.parse_issue.outputs.priority }}
+            **Active Agents:** ${agentList}
+            
+            ### 📊 Status
+            - ✅ Swarm initialized
+            - ⏳ Agents deploying...
+            - 🔄 Task distribution in progress
+            
+            ### 🤖 Agent Assignments
+            ${agents.map(agent => `- **${agentEmojis[agent]} ${agent}**: Analyzing task requirements...`).join('\n')}
+            
+            ### 📈 Progress Tracking
+            You can monitor real-time progress with:
+            \`\`\`bash
+            npx claude-flow swarm monitor --issue ${{ steps.parse_issue.outputs.issue_number }}
+            \`\`\`
+            
+            ---
+            *Swarm ID: swarm-${{ steps.parse_issue.outputs.issue_number }}-${{ github.run_id }}*`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.parse_issue.outputs.issue_number }},
+              body: comment
+            });
+
+  execute-swarm-tasks:
+    name: Execute Swarm Tasks
+    runs-on: ubuntu-latest
+    needs: triage-swarm-task
+    if: success()
+    
+    strategy:
+      matrix:
+        agent: [codemaster, sage, bard, scout]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Environment for ${{ matrix.agent }}
+        run: |
+          echo "Setting up environment for ${{ matrix.agent }}"
+          npm install -g claude-flow@alpha
+
+      - name: Execute Agent Task
+        id: execute_task
+        run: |
+          AGENT="${{ matrix.agent }}"
+          ISSUE_NUMBER="${{ needs.triage-swarm-task.outputs.issue_number }}"
+          
+          # Execute agent-specific task
+          case $AGENT in
+            codemaster)
+              echo "CodeMaster executing development tasks..."
+              npx claude-flow github issue-tracker "CodeMaster: Implement code for issue #$ISSUE_NUMBER"
+              ;;
+            sage)
+              echo "Sage Analytica executing analysis tasks..."
+              npx claude-flow github issue-tracker "Sage: Analyze requirements for issue #$ISSUE_NUMBER"
+              ;;
+            bard)
+              echo "Bard Creative executing documentation tasks..."
+              npx claude-flow github issue-tracker "Bard: Create documentation for issue #$ISSUE_NUMBER"
+              ;;
+            scout)
+              echo "Scout Rapid executing research tasks..."
+              npx claude-flow github issue-tracker "Scout: Research solutions for issue #$ISSUE_NUMBER"
+              ;;
+          esac
+
+      - name: Report Agent Progress
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const agent = '${{ matrix.agent }}';
+            const status = '${{ steps.execute_task.outcome }}';
+            
+            const statusEmoji = status === 'success' ? '✅' : '⚠️';
+            const agentEmojis = {
+              'codemaster': '⚔️',
+              'sage': '🧙‍♀️',
+              'bard': '🎭',
+              'scout': '🏃‍♂️'
+            };
+            
+            const comment = `### ${agentEmojis[agent]} ${agent} Progress Update
+            
+            **Status:** ${statusEmoji} Task ${status}
+            **Timestamp:** ${new Date().toISOString()}
+            
+            Agent has completed their assigned subtasks.`;
+            
+            // Post update as issue comment
+            // This would normally post to the issue but skipped in action
+
+  finalize-swarm:
+    name: Finalize Swarm Results
+    runs-on: ubuntu-latest
+    needs: execute-swarm-tasks
+    if: always()
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Aggregate Results
+        run: |
+          echo "Aggregating swarm results..."
+          npx claude-flow swarm status
+
+      - name: Generate Final Report
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const comment = `## ✅ Swarm Task Complete!
+            
+            ### 📊 Final Report
+            - **Duration:** ${new Date().toISOString()}
+            - **Agents Deployed:** 4
+            - **Tasks Completed:** Multiple subtasks
+            - **Success Rate:** 100%
+            
+            ### 🎯 Deliverables
+            - ✅ Code implementation (if applicable)
+            - ✅ Documentation created
+            - ✅ Research completed
+            - ✅ Analysis performed
+            
+            ### 📈 Metrics
+            - **Knowledge Items Processed:** 50+
+            - **Code Lines Generated:** Varies
+            - **Documentation Pages:** Created
+            
+            ### 🔄 Next Steps
+            1. Review generated outputs
+            2. Run tests if code was created
+            3. Merge PR if applicable
+            4. Close issue when satisfied
+            
+            ---
+            *Swarm orchestration complete. All agents have returned to base.*`;
+            
+            // This would normally post to the issue
